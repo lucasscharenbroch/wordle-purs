@@ -1,0 +1,10 @@
+{
+  "name": "wordle-purs",
+  "version": "1.0.0",
+  "scripts": {
+      "build": "spago build",
+      "test": "spago test",
+      "serve": "parcel serve dev/*.html",
+      "build-dev": "parcel build dev/*"
+  }
+}
