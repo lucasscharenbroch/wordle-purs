@@ -101,7 +101,6 @@ html, body {
 
 /* message boxes */
 .messageBox{
-    display: none;
     position: fixed;
     left: 25%;
     top: 15%;

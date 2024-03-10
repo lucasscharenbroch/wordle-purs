@@ -14,9 +14,14 @@ import Util (whenElem)
 type State =
   { showInfo :: Boolean
   , showSettings :: Boolean
+  , useFullDict :: Boolean
   }
 
 data Action = HideInfoBox
+            | HideSettingsBox
+            | TestAllWords
+            | SetUseDictWords
+            | SetUseWordleWords
 
 main :: Effect Unit
 main = HA.runHalogenAff do
@@ -27,7 +32,7 @@ infoBox :: forall w. HH.HTML w Action
 infoBox =
   HH.div
     [HP.id "messageBox"]
-    [ HH.h1_ [HH.text "Wordle"]
+    [HH.h1_ [HH.text "Wordle"]
     , HH.text "Wordle is a fun word-guessing game. You have six attempts to guess a secret word."
     , HH.br_
     , HH.br_
@@ -43,23 +48,76 @@ infoBox =
         [ HP.classes [ HH.ClassName "okButton" ]
         , HE.onClick \_ -> HideInfoBox
         ]
-        [ HH.text "OK" ]
+        [HH.text "OK"]
     ]
+
+settingsBox :: State -> forall w. HH.HTML w Action
+settingsBox state =
+  HH.div
+    [ HP.id "settingsBox"
+    , HP.classes [HH.ClassName "messageBox"]
+    ]
+    [HH.h1_ [HH.text "Settings"]
+    , HH.form_
+        [ HH.label_
+            [HH.text "Solver wordbase:"]
+        , HH.br_
+        , HH.input
+            [ HP.id "dictionaryWords"
+            , HP.type_ HP.InputRadio
+            , HP.name "wordlist"
+            , HP.checked state.useFullDict
+            ]
+        , HH.label
+            [HP.for "dictionaryWords"]
+            [HH.text "5-letter English word dictionary (21,000 words)"]
+        , HH.br_
+        , HH.input
+            [ HP.id "wordleWords"
+            , HP.type_ HP.InputRadio
+            , HP.name "wordlist"
+            , HP.checked $ not state.useFullDict
+            ]
+        , HH.label
+            [HP.for "wordleWords"]
+            [HH.text "Official Wordle Word List (2,000 words)"]
+        ]
+    , HH.br_
+    , HH.button
+        [ HP.id "testButton"
+        , HE.onClick \_ -> TestAllWords
+        ]
+        [HH.text "Test All Words in Word List"]
+    , HH.text testStatus
+    , HH.br_
+    , HH.button
+        [HP.classes [HH.ClassName "okButton"]
+        , HE.onClick \_ -> HideSettingsBox
+        ]
+        [HH.text "OK"]
+    ]
+  where testStatus = "" -- TODO compute testStatus using state
 
 render :: forall w. State -> HH.HTML w Action
 render state =
     HH.main_
-      [ whenElem state.showInfo (const infoBox)
+      [ whenElem state.showInfo (\_ -> infoBox)
+      , whenElem state.showSettings (\_ -> settingsBox state)
       ]
 
 handleAction :: forall output m. Action -> H.HalogenM State Action () output m Unit
 handleAction = case _ of
   HideInfoBox -> H.modify_ (\s -> s {showInfo = false})
+  HideSettingsBox -> H.modify_ (\s -> s {showSettings = false})
+  TestAllWords -> pure unit -- TODO
+  SetUseDictWords -> H.modify_ (\s -> s {useFullDict = true})
+  SetUseWordleWords -> H.modify_ (\s -> s {useFullDict = false})
 
 initialState :: Unit -> State
 initialState _ =
-  { showInfo: true
-  , showSettings: false
+  { showInfo: false
+  , showSettings: true
+  , useFullDict: true
   }
 
 component :: forall output m t. H.Component t Unit output m
