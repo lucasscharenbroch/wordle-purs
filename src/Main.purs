@@ -36,16 +36,16 @@ main = HA.runHalogenAff do
   body <- HA.awaitBody
   runUI component unit body
 
-container :: forall w. State -> HH.HTML w Action
-container state =
+container :: forall w. Page -> HH.HTML w Action
+container page =
   HH.div
     [HP.id "container"]
-    [ header state
+    [ header page
     -- TODO
     ]
 
-header :: forall w. State -> HH.HTML w Action
-header state =
+header :: forall w. Page -> HH.HTML w Action
+header page =
   HH.div
     [HP.id "header"]
     [ HH.div
@@ -65,14 +65,16 @@ header state =
         ]
     , HH.div
         [HP.id "title"]
-        [HH.text "Wordle"]
+        [HH.text (case page of
+                        Game -> "Wordle"
+                        Solver -> "Solver")]
     , HH.div
         [HP.id "headerButtons2"]
         [ HH.button
-            [HE.onClick \_ -> (case state.currentPage of
+            [HE.onClick \_ -> (case page of
                                 Game -> ChangePageToSolver
                                 Solver -> ChangePageToGame)]
-            [HH.text (case state.currentPage of
+            [HH.text (case page of
                         Game -> "Solver"
                         Solver -> "Game")]
         , HH.i
@@ -90,8 +92,8 @@ header state =
         ]
     ]
 
-infoBox :: forall w. HH.HTML w Action
-infoBox =
+wordleInfo :: forall w. HH.HTML w Action
+wordleInfo =
   HH.div
     [ HP.id "infoBox"
     , HP.classes [HH.ClassName "messageBox"]
@@ -114,6 +116,39 @@ infoBox =
         ]
         [HH.text "OK"]
     ]
+
+solverInfo :: forall w. HH.HTML w Action
+solverInfo =
+  HH.div
+    [ HP.id "infoBox"
+    , HP.classes [HH.ClassName "messageBox"]
+    ]
+    [HH.h1_ [HH.text "Wordle Solver"]
+    , HH.text "Use the solver tool to generate guesses for a Wordle game."
+    , HH.br_
+    , HH.br_
+    , HH.text "Click \"Generate Guess\", and the solver will give you a word to guess."
+    , HH.br_
+    , HH.br_
+    , HH.text $ "If a guess if invalid (which might be the case because the 5-letter-word " <>
+                "dictionary contains over 200,000 words) click \"Invalid Word\", and the " <>
+                "solver will disregaurd that guess and give you another one."
+    , HH.br_
+    , HH.br_
+    , HH.text $ "Once you feed the guess into the game, tell the solver the colors of the " <>
+                "letters by clicking the buttons labeled \"Gray\", \"Yellow\", and \"Green\"."
+    , HH.br_
+    , HH.button
+        [ HP.classes [ HH.ClassName "okButton" ]
+        , HE.onClick \_ -> HideInfoBox
+        ]
+        [HH.text "OK"]
+    ]
+
+infoBox :: forall w. Page -> HH.HTML w Action
+infoBox = case _ of
+  Game -> wordleInfo
+  Solver -> solverInfo
 
 settingsBox :: State -> forall w. HH.HTML w Action
 settingsBox state =
@@ -167,8 +202,8 @@ settingsBox state =
 render :: forall w. State -> HH.HTML w Action
 render state =
     HH.main_
-      [ container state
-      , whenElem state.showInfo (\_ -> infoBox)
+      [ container state.currentPage
+      , whenElem state.showInfo (\_ -> infoBox state.currentPage)
       , whenElem state.showSettings (\_ -> settingsBox state)
       ]
 
