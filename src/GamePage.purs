@@ -19,19 +19,75 @@ type State =
 
 data Action = HideInfoBox
             | HideSettingsBox
+            | ShowInfoBox
+            | ShowSettingsBox
             | TestAllWords
             | SetUseDictWords
             | SetUseWordleWords
+            | ChangePageToSolver
+            | ResetGame
 
 main :: Effect Unit
 main = HA.runHalogenAff do
   body <- HA.awaitBody
   runUI component unit body
 
+container :: forall w. HH.HTML w Action
+container =
+  HH.div
+    [HP.id "container"]
+    [ header
+    -- TODO
+    ]
+
+header :: forall w. HH.HTML w Action
+header =
+  HH.div
+    [HP.id "header"]
+    [ HH.div
+        [HP.id "headerButtons1"]
+        [ HH.i
+            [ HP.style "font-size:24px"
+            , HP.classes [HH.ClassName "fa"]
+            ]
+            [HH.text ""]
+        , HH.i
+            [ HP.style "font-size:24px"
+            , HP.classes [HH.ClassName "fa"]
+            , HP.id "infoButton"
+            , HE.onClick \_ -> ShowInfoBox
+            ]
+            [HH.text ""]
+        ]
+    , HH.div
+        [HP.id "title"]
+        [HH.text "Wordle"]
+    , HH.div
+        [HP.id "headerButtons2"]
+        [ HH.button
+            [HE.onClick \_ -> ChangePageToSolver]
+            [HH.text "Solver"]
+        , HH.i
+            [ HP.style "font-size:24px"
+            , HP.classes [HH.ClassName "fa"]
+            , HE.onClick \_ -> ResetGame
+            ]
+            [HH.text "↻"]
+        , HH.i
+            [ HP.style "font-size:24px"
+            , HP.classes [HH.ClassName "fa"]
+            , HE.onClick \_ -> ShowSettingsBox
+            ]
+            [HH.text "\xf013"]
+        ]
+    ]
+
 infoBox :: forall w. HH.HTML w Action
 infoBox =
   HH.div
-    [HP.id "messageBox"]
+    [ HP.id "infoBox"
+    , HP.classes [HH.ClassName "messageBox"]
+    ]
     [HH.h1_ [HH.text "Wordle"]
     , HH.text "Wordle is a fun word-guessing game. You have six attempts to guess a secret word."
     , HH.br_
@@ -101,7 +157,8 @@ settingsBox state =
 render :: forall w. State -> HH.HTML w Action
 render state =
     HH.main_
-      [ whenElem state.showInfo (\_ -> infoBox)
+      [ container
+      , whenElem state.showInfo (\_ -> infoBox)
       , whenElem state.showSettings (\_ -> settingsBox state)
       ]
 
@@ -109,14 +166,18 @@ handleAction :: forall output m. Action -> H.HalogenM State Action () output m U
 handleAction = case _ of
   HideInfoBox -> H.modify_ (\s -> s {showInfo = false})
   HideSettingsBox -> H.modify_ (\s -> s {showSettings = false})
-  TestAllWords -> pure unit -- TODO
+  ShowInfoBox -> H.modify_ (\s -> s {showInfo = true})
+  ShowSettingsBox -> H.modify_ (\s -> s {showSettings = true})
   SetUseDictWords -> H.modify_ (\s -> s {useFullDict = true})
   SetUseWordleWords -> H.modify_ (\s -> s {useFullDict = false})
+  TestAllWords -> pure unit -- TODO
+  ChangePageToSolver -> pure unit -- TODO
+  ResetGame -> pure unit -- TODO
 
 initialState :: Unit -> State
 initialState _ =
   { showInfo: false
-  , showSettings: true
+  , showSettings: false
   , useFullDict: true
   }
 
