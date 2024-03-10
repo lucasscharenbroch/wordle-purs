@@ -123,6 +123,7 @@ settingsBox state =
             , HP.type_ HP.InputRadio
             , HP.name "wordlist"
             , HP.checked state.useFullDict
+            , HE.onClick \_ -> SetUseDictWords
             ]
         , HH.label
             [HP.for "dictionaryWords"]
@@ -133,6 +134,7 @@ settingsBox state =
             , HP.type_ HP.InputRadio
             , HP.name "wordlist"
             , HP.checked $ not state.useFullDict
+            , HE.onClick \_ -> SetUseWordleWords
             ]
         , HH.label
             [HP.for "wordleWords"]
