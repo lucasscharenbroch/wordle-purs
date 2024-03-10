@@ -2,6 +2,8 @@ module Main where
 
 import Prelude
 
+import Data.Array (replicate)
+import Data.String.CodeUnits (singleton)
 import Effect (Effect)
 import Halogen as H
 import Halogen.Aff as HA
@@ -13,11 +15,21 @@ import Util (whenElem)
 
 data Page = Game | Solver
 
+type Board = Array (Array Cell) -- 6 x 5
+
+data Color = Green | Yellow | Gray | None
+
+type Cell =
+  { color :: Color
+  , letter :: Char
+  }
+
 type State =
   { showInfo :: Boolean
   , showSettings :: Boolean
   , useFullDict :: Boolean
   , currentPage :: Page
+  , board :: Board
   }
 
 data Action = HideInfoBox
@@ -36,13 +48,42 @@ main = HA.runHalogenAff do
   body <- HA.awaitBody
   runUI component unit body
 
-container :: forall w. Page -> HH.HTML w Action
-container page =
+container :: forall w. State -> HH.HTML w Action
+container state =
   HH.div
     [HP.id "container"]
-    [ header page
+    [ header state.currentPage
+    , drawBoard state.board
     -- TODO
     ]
+
+drawBoard :: forall w. Board -> HH.HTML w Action
+drawBoard board =
+  HH.div
+    [HP.id "body"]
+    (map mkRow board)
+  where
+    mkRow row =
+      HH.div
+        [HP.classes [HH.ClassName "row"]]
+        (map mkCell row)
+    mkCell {letter, color} =
+      HH.div
+        [ HP.classes [HH.ClassName "box"]
+        , HP.style style
+        ]
+        [HH.text $ singleton letter]
+      where
+        style =
+          case color of
+            Green -> "background-color: rgb(106, 170, 100);"
+            Yellow -> "background-color: rgb(201, 180, 88);"
+            Gray -> "background-color: rgb(120, 124, 126);"
+            None -> ""
+          <> " "
+          <> case letter of
+                 ' ' -> ""
+                 _ -> "border: 4px solid #696969;"
 
 header :: forall w. Page -> HH.HTML w Action
 header page =
@@ -202,7 +243,7 @@ settingsBox state =
 render :: forall w. State -> HH.HTML w Action
 render state =
     HH.main_
-      [ container state.currentPage
+      [ container state
       , whenElem state.showInfo (\_ -> infoBox state.currentPage)
       , whenElem state.showSettings (\_ -> settingsBox state)
       ]
@@ -215,10 +256,17 @@ handleAction = case _ of
   ShowSettingsBox -> H.modify_ (\s -> s {showSettings = true})
   SetUseDictWords -> H.modify_ (\s -> s {useFullDict = true})
   SetUseWordleWords -> H.modify_ (\s -> s {useFullDict = false})
-  TestAllWords -> pure unit -- TODO
   ChangePageToSolver -> H.modify_ (\s -> s {currentPage = Solver})
   ChangePageToGame -> H.modify_ (\s -> s {currentPage = Game})
+  TestAllWords -> pure unit -- TODO
   ResetGame -> pure unit -- TODO
+
+
+defCell :: Cell
+defCell = {color: None, letter: ' '}
+
+defBoard :: Board
+defBoard = replicate 6 (replicate 5 defCell)
 
 initialState :: Unit -> State
 initialState _ =
@@ -226,6 +274,7 @@ initialState _ =
   , showSettings: false
   , useFullDict: true
   , currentPage: Game
+  , board: defBoard
   }
 
 component :: forall output m t. H.Component t Unit output m

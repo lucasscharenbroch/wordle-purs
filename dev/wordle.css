@@ -45,7 +45,7 @@ html, body {
 
 .row {
     display: flex;
-    width:320px;
+    width: 320px;
 }
 
 .box {
@@ -57,7 +57,7 @@ html, body {
     display: flex;
     justify-content: center;
     align-items: center;
-    font-weight:bold;
+    font-weight: bold;
 }
 
 .key {
