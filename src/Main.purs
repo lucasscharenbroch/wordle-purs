@@ -11,10 +11,13 @@ import Halogen.HTML.Properties as HP
 import Halogen.VDom.Driver (runUI)
 import Util (whenElem)
 
+data Page = Game | Solver
+
 type State =
   { showInfo :: Boolean
   , showSettings :: Boolean
   , useFullDict :: Boolean
+  , currentPage :: Page
   }
 
 data Action = HideInfoBox
@@ -25,6 +28,7 @@ data Action = HideInfoBox
             | SetUseDictWords
             | SetUseWordleWords
             | ChangePageToSolver
+            | ChangePageToGame
             | ResetGame
 
 main :: Effect Unit
@@ -32,16 +36,16 @@ main = HA.runHalogenAff do
   body <- HA.awaitBody
   runUI component unit body
 
-container :: forall w. HH.HTML w Action
-container =
+container :: forall w. State -> HH.HTML w Action
+container state =
   HH.div
     [HP.id "container"]
-    [ header
+    [ header state
     -- TODO
     ]
 
-header :: forall w. HH.HTML w Action
-header =
+header :: forall w. State -> HH.HTML w Action
+header state =
   HH.div
     [HP.id "header"]
     [ HH.div
@@ -65,8 +69,12 @@ header =
     , HH.div
         [HP.id "headerButtons2"]
         [ HH.button
-            [HE.onClick \_ -> ChangePageToSolver]
-            [HH.text "Solver"]
+            [HE.onClick \_ -> (case state.currentPage of
+                                Game -> ChangePageToSolver
+                                Solver -> ChangePageToGame)]
+            [HH.text (case state.currentPage of
+                        Game -> "Solver"
+                        Solver -> "Game")]
         , HH.i
             [ HP.style "font-size:24px"
             , HP.classes [HH.ClassName "fa"]
@@ -159,7 +167,7 @@ settingsBox state =
 render :: forall w. State -> HH.HTML w Action
 render state =
     HH.main_
-      [ container
+      [ container state
       , whenElem state.showInfo (\_ -> infoBox)
       , whenElem state.showSettings (\_ -> settingsBox state)
       ]
@@ -173,7 +181,8 @@ handleAction = case _ of
   SetUseDictWords -> H.modify_ (\s -> s {useFullDict = true})
   SetUseWordleWords -> H.modify_ (\s -> s {useFullDict = false})
   TestAllWords -> pure unit -- TODO
-  ChangePageToSolver -> pure unit -- TODO
+  ChangePageToSolver -> H.modify_ (\s -> s {currentPage = Solver})
+  ChangePageToGame -> H.modify_ (\s -> s {currentPage = Game})
   ResetGame -> pure unit -- TODO
 
 initialState :: Unit -> State
@@ -181,6 +190,7 @@ initialState _ =
   { showInfo: false
   , showSettings: false
   , useFullDict: true
+  , currentPage: Game
   }
 
 component :: forall output m t. H.Component t Unit output m
