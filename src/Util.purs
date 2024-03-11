@@ -11,3 +11,12 @@ import Halogen.VDom.Driver (runUI)
 
 whenElem :: forall w i. Boolean -> (Unit -> HH.HTML w i) -> HH.HTML w i
 whenElem cond f = if cond then f unit else HH.text ""
+
+backspaceText :: forall w i. HH.HTML w i
+backspaceText =
+    HH.i
+      [HP.classes
+          [ HH.ClassName "fa"
+          , HH.ClassName "fa-arrow-left"
+          ]]
+      []

@@ -3,7 +3,10 @@ module Main where
 import Prelude
 
 import Data.Array (replicate)
+import Data.Array as Array
 import Data.Map (Map, empty)
+import Data.Map as Map
+import Data.Maybe (fromMaybe)
 import Data.String.CodeUnits (singleton, toCharArray)
 import Effect (Effect)
 import Halogen as H
@@ -12,11 +15,7 @@ import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Halogen.VDom.Driver (runUI)
-import Util (whenElem)
-import Data.Maybe (fromMaybe)
-
-import Data.Array as Array
-import Data.Map as Map
+import Util (backspaceText, whenElem)
 
 data Page = Game GameState
           | Solver SolverState
@@ -65,6 +64,9 @@ data Action = HideInfoBox
             | ChangePageToGame
             | ResetGame
             | PressKeyboardKey Key
+            | PressColorKey Color
+            | GenerateGuess
+            | RegenerateGuess
 
 main :: Effect Unit
 main = HA.runHalogenAff do
@@ -84,12 +86,7 @@ keyboard kstate =
             , HE.onClick \_ -> PressKeyboardKey k
             ] <> extraProps)
         charToKey c = case c of
-          'b' -> mkKeyButton c KBack [HP.id "back"] $ [HH.i
-                                                    [HP.classes
-                                                      [ HH.ClassName "fa"
-                                                      , HH.ClassName "fa-arrow-left"
-                                                      ]]
-                                                   []]
+          'b' -> mkKeyButton c KBack [HP.id "back"] [backspaceText]
           'e' -> mkKeyButton c KEnter [HP.id "enter"] $ [HH.text "ENTER"]
           's' -> mkKeyButton c KSolve [HP.id "solve"] $ [HH.text "Solve"]
           _ -> mkKeyButton c (KLetter c) colorPropArr $ [HH.text $ singleton c]
@@ -104,7 +101,34 @@ keyboard kstate =
             [HP.classes [HH.ClassName "keyboardRow"]]
 
 solverButtons :: forall w. HH.HTML w Action
-solverButtons = HH.text "buttons" -- TODO
+solverButtons =
+  HH.div
+    [HP.id "buttons"]
+    [ HH.div
+        [HP.id "colorButtons"]
+        [ HH.button
+            [HE.onClick \_ -> PressColorKey Gray]
+            [HH.text "Gray"]
+        , HH.button
+            [HE.onClick \_ -> PressColorKey Yellow]
+            [HH.text "Yellow"]
+        , HH.button
+            [HE.onClick \_ -> PressColorKey Green]
+            [HH.text "Green"]
+        , HH.button
+            [HE.onClick \_ -> PressColorKey None] -- None means backspace
+            [backspaceText]
+        ]
+    , HH.div
+        [HP.id "utilButtons"]
+        [ HH.button
+          [HE.onClick \_ -> GenerateGuess]
+          [HH.text "Get Guess"]
+        , HH.button
+          [HE.onClick \_ -> RegenerateGuess]
+          [HH.text "Invalid Word"]
+        ]
+    ]
 
 container :: forall w. State -> HH.HTML w Action
 container state =
@@ -319,8 +343,11 @@ handleAction = case _ of
   ChangePageToSolver -> H.modify_ (\s -> s {currentPage = Solver defSolverState})
   ChangePageToGame -> H.modify_ (\s -> s {currentPage = Game defGameState})
   PressKeyboardKey k -> pure unit -- TODO
+  PressColorKey c -> pure unit -- TODO
   TestAllWords -> pure unit -- TODO
   ResetGame -> pure unit -- TODO
+  GenerateGuess -> pure unit -- TODO
+  RegenerateGuess -> pure unit -- TODO
 
 defGameState :: GameState
 defGameState =
