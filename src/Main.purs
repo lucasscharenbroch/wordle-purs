@@ -53,15 +53,12 @@ type State =
 
 type KeyboardState = Map Char Color
 
-data Action = HideInfoBox
-            | HideSettingsBox
-            | ShowInfoBox
-            | ShowSettingsBox
+data Action = SetInfoBoxVis Boolean
+            | SetSettingsBoxVis Boolean
             | TestAllWords
             | SetUseDictWords
             | SetUseWordleWords
-            | ChangePageToSolver
-            | ChangePageToGame
+            | ChangePage Page
             | ResetGame
             | PressKeyboardKey Key
             | PressColorKey Color
@@ -184,7 +181,7 @@ header page =
             [ HP.style "font-size:24px"
             , HP.classes [HH.ClassName "fa"]
             , HP.id "infoButton"
-            , HE.onClick \_ -> ShowInfoBox
+            , HE.onClick \_ -> SetInfoBoxVis true
             ]
             [HH.text ""]
         ]
@@ -197,8 +194,8 @@ header page =
         [HP.id "headerButtons2"]
         [ HH.button
             [HE.onClick \_ -> (case page of
-                                Game _ -> ChangePageToSolver
-                                Solver _ -> ChangePageToGame)]
+                                Game _ -> ChangePage $ Solver defSolverState
+                                Solver _ -> ChangePage $ Game defGameState)]
             [HH.text (case page of
                         Game _ -> "Solver"
                         Solver _ -> "Game")]
@@ -211,7 +208,7 @@ header page =
         , HH.i
             [ HP.style "font-size:24px"
             , HP.classes [HH.ClassName "fa"]
-            , HE.onClick \_ -> ShowSettingsBox
+            , HE.onClick \_ -> SetSettingsBoxVis true
             ]
             [HH.text "\xf013"]
         ]
@@ -237,7 +234,7 @@ wordleInfo =
     , HH.br_
     , HH.button
         [ HP.classes [ HH.ClassName "okButton" ]
-        , HE.onClick \_ -> HideInfoBox
+        , HE.onClick \_ -> SetInfoBoxVis false
         ]
         [HH.text "OK"]
     ]
@@ -265,7 +262,7 @@ solverInfo =
     , HH.br_
     , HH.button
         [ HP.classes [ HH.ClassName "okButton" ]
-        , HE.onClick \_ -> HideInfoBox
+        , HE.onClick \_ -> SetInfoBoxVis false
         ]
         [HH.text "OK"]
     ]
@@ -318,7 +315,7 @@ settingsBox state =
     , HH.br_
     , HH.button
         [HP.classes [HH.ClassName "okButton"]
-        , HE.onClick \_ -> HideSettingsBox
+        , HE.onClick \_ -> SetSettingsBoxVis false
         ]
         [HH.text "OK"]
     ]
@@ -334,14 +331,11 @@ render state =
 
 handleAction :: forall output m. Action -> H.HalogenM State Action () output m Unit
 handleAction = case _ of
-  HideInfoBox -> H.modify_ (\s -> s {showInfo = false})
-  HideSettingsBox -> H.modify_ (\s -> s {showSettings = false})
-  ShowInfoBox -> H.modify_ (\s -> s {showInfo = true})
-  ShowSettingsBox -> H.modify_ (\s -> s {showSettings = true})
+  SetInfoBoxVis isVis -> H.modify_ (\s -> s {showInfo = isVis})
+  SetSettingsBoxVis isVis -> H.modify_ (\s -> s {showSettings = isVis})
   SetUseDictWords -> H.modify_ (\s -> s {useFullDict = true})
   SetUseWordleWords -> H.modify_ (\s -> s {useFullDict = false})
-  ChangePageToSolver -> H.modify_ (\s -> s {currentPage = Solver defSolverState})
-  ChangePageToGame -> H.modify_ (\s -> s {currentPage = Game defGameState})
+  ChangePage newPage -> H.modify_ (\s -> s {currentPage = newPage})
   PressKeyboardKey k -> pure unit -- TODO
   PressColorKey c -> pure unit -- TODO
   TestAllWords -> pure unit -- TODO
