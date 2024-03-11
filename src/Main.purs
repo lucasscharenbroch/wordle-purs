@@ -3,7 +3,8 @@ module Main where
 import Prelude
 
 import Data.Array (replicate)
-import Data.String.CodeUnits (singleton)
+import Data.Map (Map, empty)
+import Data.String.CodeUnits (singleton, toCharArray)
 import Effect (Effect)
 import Halogen as H
 import Halogen.Aff as HA
@@ -12,12 +13,31 @@ import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Halogen.VDom.Driver (runUI)
 import Util (whenElem)
+import Data.Maybe (fromMaybe)
 
-data Page = Game | Solver
+import Data.Array as Array
+import Data.Map as Map
+
+data Page = Game GameState
+          | Solver SolverState
+
+type GameState =
+  { keyboardState :: KeyboardState
+  , currentWord :: String
+  , currentRow :: Int
+  }
+type SolverState =
+  { currentGuess :: Int
+  }
 
 type Board = Array (Array Cell) -- 6 x 5
 
 data Color = Green | Yellow | Gray | None
+
+data Key = KEnter
+         | KBack
+         | KSolve
+         | KLetter Char
 
 type Cell =
   { color :: Color
@@ -32,6 +52,8 @@ type State =
   , board :: Board
   }
 
+type KeyboardState = Map Char Color
+
 data Action = HideInfoBox
             | HideSettingsBox
             | ShowInfoBox
@@ -42,11 +64,47 @@ data Action = HideInfoBox
             | ChangePageToSolver
             | ChangePageToGame
             | ResetGame
+            | PressKeyboardKey Key
 
 main :: Effect Unit
 main = HA.runHalogenAff do
   body <- HA.awaitBody
   runUI component unit body
+
+keyboard :: forall w. KeyboardState -> HH.HTML w Action
+keyboard kstate =
+  HH.div
+    [HP.id "keyboard"]
+    keys
+  where keys = map (toKeyboardRow <<< map charToKey <<< toCharArray) $ chars
+        chars = ["QWERTYUIOP", "ASDFGHJKL", "eZXCVBNMb", "s"]
+        mkKeyButton c k extraProps =
+          HH.button
+            ([ HP.classes [HH.ClassName "key"]
+            , HE.onClick \_ -> PressKeyboardKey k
+            ] <> extraProps)
+        charToKey c = case c of
+          'b' -> mkKeyButton c KBack [HP.id "back"] $ [HH.i
+                                                    [HP.classes
+                                                      [ HH.ClassName "fa"
+                                                      , HH.ClassName "fa-arrow-left"
+                                                      ]]
+                                                   []]
+          'e' -> mkKeyButton c KEnter [HP.id "enter"] $ [HH.text "ENTER"]
+          's' -> mkKeyButton c KSolve [HP.id "solve"] $ [HH.text "Solve"]
+          _ -> mkKeyButton c (KLetter c) colorPropArr $ [HH.text $ singleton c]
+            where colorPropArr = fromMaybe [] $ Array.singleton <<< colorToProp <$> Map.lookup c kstate
+                  colorToProp = case _ of
+                    Green -> HP.style $ "background-color: rgb(106, 170, 100);"
+                    Yellow -> HP.style $ "background-color: rgb(201, 180, 88);"
+                    Gray -> HP.style $ "background-color: rgb(120, 124, 126);"
+                    None -> HP.style $ ""
+        toKeyboardRow =
+          HH.div
+            [HP.classes [HH.ClassName "keyboardRow"]]
+
+solverButtons :: forall w. HH.HTML w Action
+solverButtons = HH.text "buttons" -- TODO
 
 container :: forall w. State -> HH.HTML w Action
 container state =
@@ -54,7 +112,9 @@ container state =
     [HP.id "container"]
     [ header state.currentPage
     , drawBoard state.board
-    -- TODO
+    , (case state.currentPage of
+        (Game {keyboardState}) -> keyboard keyboardState
+        (Solver _) -> solverButtons)
     ]
 
 drawBoard :: forall w. Board -> HH.HTML w Action
@@ -107,17 +167,17 @@ header page =
     , HH.div
         [HP.id "title"]
         [HH.text (case page of
-                        Game -> "Wordle"
-                        Solver -> "Solver")]
+                        Game _ -> "Wordle"
+                        Solver _ -> "Solver")]
     , HH.div
         [HP.id "headerButtons2"]
         [ HH.button
             [HE.onClick \_ -> (case page of
-                                Game -> ChangePageToSolver
-                                Solver -> ChangePageToGame)]
+                                Game _ -> ChangePageToSolver
+                                Solver _ -> ChangePageToGame)]
             [HH.text (case page of
-                        Game -> "Solver"
-                        Solver -> "Game")]
+                        Game _ -> "Solver"
+                        Solver _ -> "Game")]
         , HH.i
             [ HP.style "font-size:24px"
             , HP.classes [HH.ClassName "fa"]
@@ -188,8 +248,8 @@ solverInfo =
 
 infoBox :: forall w. Page -> HH.HTML w Action
 infoBox = case _ of
-  Game -> wordleInfo
-  Solver -> solverInfo
+  Game _ -> wordleInfo
+  Solver _ -> solverInfo
 
 settingsBox :: State -> forall w. HH.HTML w Action
 settingsBox state =
@@ -256,11 +316,23 @@ handleAction = case _ of
   ShowSettingsBox -> H.modify_ (\s -> s {showSettings = true})
   SetUseDictWords -> H.modify_ (\s -> s {useFullDict = true})
   SetUseWordleWords -> H.modify_ (\s -> s {useFullDict = false})
-  ChangePageToSolver -> H.modify_ (\s -> s {currentPage = Solver})
-  ChangePageToGame -> H.modify_ (\s -> s {currentPage = Game})
+  ChangePageToSolver -> H.modify_ (\s -> s {currentPage = Solver defSolverState})
+  ChangePageToGame -> H.modify_ (\s -> s {currentPage = Game defGameState})
+  PressKeyboardKey k -> pure unit -- TODO
   TestAllWords -> pure unit -- TODO
   ResetGame -> pure unit -- TODO
 
+defGameState :: GameState
+defGameState =
+  { keyboardState: empty
+  , currentWord: "great" -- TODO generate word
+  , currentRow: 1
+  }
+
+defSolverState :: SolverState
+defSolverState =
+  { currentGuess: 1
+  }
 
 defCell :: Cell
 defCell = {color: None, letter: ' '}
@@ -273,7 +345,7 @@ initialState _ =
   { showInfo: false
   , showSettings: false
   , useFullDict: true
-  , currentPage: Game
+  , currentPage: Game defGameState
   , board: defBoard
   }
 
