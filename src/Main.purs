@@ -2,12 +2,14 @@ module Main where
 
 import Prelude
 
-import Data.Array (replicate)
+import Data.Array (replicate, range, (!!))
 import Data.Array as Array
 import Data.Map (Map, empty)
 import Data.Map as Map
+import Data.Maybe (Maybe(..))
 import Data.Maybe (fromMaybe)
-import Data.String.CodeUnits (singleton, toCharArray)
+import Data.String as String
+import Data.String.CodeUnits (fromCharArray, singleton, toCharArray)
 import Effect (Effect)
 import Halogen as H
 import Halogen.Aff as HA
@@ -23,10 +25,10 @@ data Page = Game GameState
 type GameState =
   { keyboardState :: KeyboardState
   , currentWord :: String
-  , currentRow :: Int
+  , guesses :: Array String
   }
 type SolverState =
-  { currentGuess :: Int
+  { guesses :: Array String
   }
 
 type Board = Array (Array Cell) -- 6 x 5
@@ -59,7 +61,7 @@ data Action = SetInfoBoxVis Boolean
             | SetUseDictWords
             | SetUseWordleWords
             | ChangePage Page
-            | ResetGame
+            | Reset
             | PressKeyboardKey Key
             | PressColorKey Color
             | GenerateGuess
@@ -77,16 +79,16 @@ keyboard kstate =
     keys
   where keys = map (toKeyboardRow <<< map charToKey <<< toCharArray) $ chars
         chars = ["QWERTYUIOP", "ASDFGHJKL", "eZXCVBNMb", "s"]
-        mkKeyButton c k extraProps =
+        mkKeyButton k extraProps =
           HH.button
             ([ HP.classes [HH.ClassName "key"]
             , HE.onClick \_ -> PressKeyboardKey k
             ] <> extraProps)
         charToKey c = case c of
-          'b' -> mkKeyButton c KBack [HP.id "back"] [backspaceText]
-          'e' -> mkKeyButton c KEnter [HP.id "enter"] $ [HH.text "ENTER"]
-          's' -> mkKeyButton c KSolve [HP.id "solve"] $ [HH.text "Solve"]
-          _ -> mkKeyButton c (KLetter c) colorPropArr $ [HH.text $ singleton c]
+          'b' -> mkKeyButton KBack [HP.id "back"] [backspaceText]
+          'e' -> mkKeyButton KEnter [HP.id "enter"] $ [HH.text "ENTER"]
+          's' -> mkKeyButton KSolve [HP.id "solve"] $ [HH.text "Solve"]
+          _ -> mkKeyButton (KLetter c) colorPropArr $ [HH.text $ singleton c]
             where colorPropArr = fromMaybe [] $ Array.singleton <<< colorToProp <$> Map.lookup c kstate
                   colorToProp = case _ of
                     Green -> HP.style $ "background-color: rgb(106, 170, 100);"
@@ -202,7 +204,7 @@ header page =
         , HH.i
             [ HP.style "font-size:24px"
             , HP.classes [HH.ClassName "fa"]
-            , HE.onClick \_ -> ResetGame
+            , HE.onClick \_ -> Reset
             ]
             [HH.text "↻"]
         , HH.i
@@ -329,6 +331,37 @@ render state =
       , whenElem state.showSettings (\_ -> settingsBox state)
       ]
 
+
+wordLength :: Int
+wordLength = 5
+
+maxGuesses :: Int
+maxGuesses = 6
+
+gameStateKeyPress :: GameState -> Key -> GameState
+gameStateKeyPress state@{guesses} (KLetter c) =
+  case Array.unsnoc guesses of
+    Nothing -> state {guesses = [singleton c]}
+    Just {init, last}
+      | String.length last == wordLength -> state {guesses = init <> [last]}
+      | otherwise -> state {guesses = init <> [last <> singleton c]}
+gameStateKeyPress state@{guesses} KBack =
+  case Array.unsnoc guesses of
+    Nothing -> state
+    Just {init, last} ->
+      case Array.unsnoc (toCharArray last) of
+        Nothing -> state
+        Just {init: sinit} -> state {guesses = init <> [fromCharArray sinit]}
+gameStateKeyPress state _ = state -- TODO
+
+gameRenderBoard :: GameState -> Board
+gameRenderBoard state@{guesses} = map renderRow (range 0 5)
+  where renderRow i = map (renderCell i) (range 0 4)
+        renderCell i j =
+          case guesses !! i >>= \s -> (toCharArray s) !! j of
+            Nothing -> defCell
+            Just c -> {color: None, letter: c}
+
 handleAction :: forall output m. Action -> H.HalogenM State Action () output m Unit
 handleAction = case _ of
   SetInfoBoxVis isVis -> H.modify_ (\s -> s {showInfo = isVis})
@@ -336,23 +369,28 @@ handleAction = case _ of
   SetUseDictWords -> H.modify_ (\s -> s {useFullDict = true})
   SetUseWordleWords -> H.modify_ (\s -> s {useFullDict = false})
   ChangePage newPage -> H.modify_ (\s -> s {currentPage = newPage})
-  PressKeyboardKey k -> pure unit -- TODO
+  PressKeyboardKey k -> H.modify_ (\s -> case s.currentPage of
+                                   Game gState -> s { currentPage = Game gState'
+                                                    , board = gameRenderBoard gState'
+                                                    }
+                                     where gState' = gameStateKeyPress gState k
+                                   _ -> s)
   PressColorKey c -> pure unit -- TODO
   TestAllWords -> pure unit -- TODO
-  ResetGame -> pure unit -- TODO
+  Reset -> pure unit -- TODO
   GenerateGuess -> pure unit -- TODO
   RegenerateGuess -> pure unit -- TODO
 
 defGameState :: GameState
 defGameState =
   { keyboardState: empty
-  , currentWord: "great" -- TODO generate word
-  , currentRow: 1
+  , currentWord: "GREAT" -- TODO generate word
+  , guesses: []
   }
 
 defSolverState :: SolverState
 defSolverState =
-  { currentGuess: 1
+  { guesses: []
   }
 
 defCell :: Cell
