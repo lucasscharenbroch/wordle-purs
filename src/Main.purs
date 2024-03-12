@@ -2,7 +2,7 @@ module Main where
 
 import Prelude
 
-import Data.Array (replicate, range, (!!))
+import Data.Array (replicate, range, (!!), length)
 import Data.Array as Array
 import Data.Map (Map, empty)
 import Data.Map as Map
@@ -25,7 +25,8 @@ data Page = Game GameState
 type GameState =
   { keyboardState :: KeyboardState
   , currentWord :: String
-  , guesses :: Array String
+  , sentGuesses :: Array String
+  , currentGuess :: String
   }
 type SolverState =
   { guesses :: Array String
@@ -37,7 +38,6 @@ data Color = Green | Yellow | Gray | None
 
 data Key = KEnter
          | KBack
-         | KSolve
          | KLetter Char
 
 type Cell =
@@ -66,6 +66,7 @@ data Action = SetInfoBoxVis Boolean
             | PressColorKey Color
             | GenerateGuess
             | RegenerateGuess
+            | SolveGame
 
 main :: Effect Unit
 main = HA.runHalogenAff do
@@ -79,16 +80,16 @@ keyboard kstate =
     keys
   where keys = map (toKeyboardRow <<< map charToKey <<< toCharArray) $ chars
         chars = ["QWERTYUIOP", "ASDFGHJKL", "eZXCVBNMb", "s"]
-        mkKeyButton k extraProps =
+        mkKeyButton action extraProps =
           HH.button
             ([ HP.classes [HH.ClassName "key"]
-            , HE.onClick \_ -> PressKeyboardKey k
+            , HE.onClick \_ -> action
             ] <> extraProps)
         charToKey c = case c of
-          'b' -> mkKeyButton KBack [HP.id "back"] [backspaceText]
-          'e' -> mkKeyButton KEnter [HP.id "enter"] $ [HH.text "ENTER"]
-          's' -> mkKeyButton KSolve [HP.id "solve"] $ [HH.text "Solve"]
-          _ -> mkKeyButton (KLetter c) colorPropArr $ [HH.text $ singleton c]
+          'b' -> mkKeyButton (PressKeyboardKey KBack) [HP.id "back"] [backspaceText]
+          'e' -> mkKeyButton (PressKeyboardKey KEnter) [HP.id "enter"] $ [HH.text "ENTER"]
+          's' -> mkKeyButton SolveGame [HP.id "solve"] $ [HH.text "Solve"]
+          _ -> mkKeyButton (PressKeyboardKey $ KLetter c) colorPropArr $ [HH.text $ singleton c]
             where colorPropArr = fromMaybe [] $ Array.singleton <<< colorToProp <$> Map.lookup c kstate
                   colorToProp = case _ of
                     Green -> HP.style $ "background-color: rgb(106, 170, 100);"
@@ -339,28 +340,27 @@ maxGuesses :: Int
 maxGuesses = 6
 
 gameStateKeyPress :: GameState -> Key -> GameState
-gameStateKeyPress state@{guesses} (KLetter c) =
-  case Array.unsnoc guesses of
-    Nothing -> state {guesses = [singleton c]}
-    Just {init, last}
-      | String.length last == wordLength -> state {guesses = init <> [last]}
-      | otherwise -> state {guesses = init <> [last <> singleton c]}
-gameStateKeyPress state@{guesses} KBack =
-  case Array.unsnoc guesses of
+gameStateKeyPress state@{sentGuesses, currentGuess} (KLetter c)
+  | length sentGuesses >= maxGuesses = state
+  | String.length currentGuess < wordLength = state {currentGuess = currentGuess <> singleton c}
+  | otherwise = state
+gameStateKeyPress state@{currentGuess} KBack =
+  case Array.unsnoc (toCharArray currentGuess) of
     Nothing -> state
-    Just {init, last} ->
-      case Array.unsnoc (toCharArray last) of
-        Nothing -> state
-        Just {init: sinit} -> state {guesses = init <> [fromCharArray sinit]}
-gameStateKeyPress state _ = state -- TODO
+    Just {init} -> state {currentGuess = fromCharArray init}
+gameStateKeyPress state@{sentGuesses, currentGuess} KEnter
+  | String.length currentGuess /= wordLength = state
+  | otherwise = state {sentGuesses = sentGuesses <> [currentGuess], currentGuess = ""}
 
 gameRenderBoard :: GameState -> Board
-gameRenderBoard state@{guesses} = map renderRow (range 0 5)
-  where renderRow i = map (renderCell i) (range 0 4)
-        renderCell i j =
-          case guesses !! i >>= \s -> (toCharArray s) !! j of
-            Nothing -> defCell
-            Just c -> {color: None, letter: c}
+gameRenderBoard {sentGuesses, currentGuess} =
+  map colorRow sentGuesses
+  <> [mkPaddedRow currentGuess]
+  <> replicate (maxGuesses - length sentGuesses - 1) (replicate wordLength defCell)
+  where mkPaddedRow s = map (\c -> {color: None, letter: c}) (toCharArray s) <> replicate (wordLength - String.length s) defCell
+
+colorRow :: String -> Array Cell
+colorRow = map (\c -> {color: Green, letter: c}) <<< toCharArray -- TODO
 
 handleAction :: forall output m. Action -> H.HalogenM State Action () output m Unit
 handleAction = case _ of
@@ -380,12 +380,14 @@ handleAction = case _ of
   Reset -> pure unit -- TODO
   GenerateGuess -> pure unit -- TODO
   RegenerateGuess -> pure unit -- TODO
+  SolveGame -> pure unit -- TODO
 
 defGameState :: GameState
 defGameState =
   { keyboardState: empty
   , currentWord: "GREAT" -- TODO generate word
-  , guesses: []
+  , sentGuesses: []
+  , currentGuess: ""
   }
 
 defSolverState :: SolverState
