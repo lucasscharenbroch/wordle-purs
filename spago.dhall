@@ -12,7 +12,8 @@ to generate this file without the comments in this block.
 -}
 { name = "my-project"
 , dependencies =
-  [ "arrays"
+  [ "aff"
+  , "arrays"
   , "console"
   , "effect"
   , "halogen"
@@ -20,6 +21,9 @@ to generate this file without the comments in this block.
   , "ordered-collections"
   , "prelude"
   , "strings"
+  , "unicode"
+  , "web-html"
+  , "web-uievents"
   ]
 , packages = ./packages.dhall
 , sources = [ "src/**/*.purs", "test/**/*.purs" ]

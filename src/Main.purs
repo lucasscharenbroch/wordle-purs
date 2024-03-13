@@ -1,6 +1,7 @@
 module Main where
 
 import Prelude
+import Util
 
 import Data.Array (replicate, range, (!!), length)
 import Data.Array as Array
@@ -9,15 +10,23 @@ import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Maybe (fromMaybe)
 import Data.String as String
-import Data.String.CodeUnits (fromCharArray, singleton, toCharArray)
+import Data.String.CodeUnits (charAt, fromCharArray, singleton, toCharArray)
 import Effect (Effect)
+import Effect.Aff (Aff)
 import Halogen as H
 import Halogen.Aff as HA
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
+import Halogen.Query.Event (eventListener)
 import Halogen.VDom.Driver (runUI)
 import Util (backspaceText, whenElem)
+import Web.HTML (window) as Web
+import Web.HTML.HTMLDocument as HTMLDocument
+import Web.HTML.Window (document) as Web
+import Web.UIEvent.KeyboardEvent (KeyboardEvent)
+import Web.UIEvent.KeyboardEvent as KE
+import Web.UIEvent.KeyboardEvent.EventTypes as KET
 
 data Page = Game GameState
           | Solver SolverState
@@ -67,6 +76,8 @@ data Action = SetInfoBoxVis Boolean
             | GenerateGuess
             | RegenerateGuess
             | SolveGame
+            | InitKeybinds
+            | HandleKeypress KeyboardEvent
 
 main :: Effect Unit
 main = HA.runHalogenAff do
@@ -324,7 +335,7 @@ settingsBox state =
     ]
   where testStatus = "" -- TODO compute testStatus using state
 
-render :: forall w. State -> HH.HTML w Action
+render :: forall slots. State -> HH.HTML (H.ComponentSlot slots Aff Action) Action
 render state =
     HH.main_
       [ container state
@@ -362,7 +373,7 @@ gameRenderBoard {sentGuesses, currentGuess} =
 colorRow :: String -> Array Cell
 colorRow = map (\c -> {color: Green, letter: c}) <<< toCharArray -- TODO
 
-handleAction :: forall output m. Action -> H.HalogenM State Action () output m Unit
+handleAction :: forall o. Action -> H.HalogenM State Action () o Aff Unit
 handleAction = case _ of
   SetInfoBoxVis isVis -> H.modify_ (\s -> s {showInfo = isVis})
   SetSettingsBoxVis isVis -> H.modify_ (\s -> s {showSettings = isVis})
@@ -381,6 +392,21 @@ handleAction = case _ of
   GenerateGuess -> pure unit -- TODO
   RegenerateGuess -> pure unit -- TODO
   SolveGame -> pure unit -- TODO
+  InitKeybinds -> do
+    document <- H.liftEffect $ Web.document =<< Web.window
+    void <<< H.subscribe $
+      eventListener
+        KET.keyup
+        (HTMLDocument.toEventTarget document)
+        (map HandleKeypress <<< KE.fromEvent)
+  HandleKeypress event -> res
+    where k = KE.key event
+          first = fromMaybe '_' <<< Array.head <<< toCharArray $ k
+          res
+            | KE.key event == "Enter" = handleAction $ PressKeyboardKey KEnter
+            | KE.key event == "Backspace" = handleAction $ PressKeyboardKey KBack
+            | String.length k == 1 && isLetter first = handleAction <<< PressKeyboardKey <<< KLetter <<< toUpper $ first
+            | otherwise = pure unit
 
 defGameState :: GameState
 defGameState =
@@ -410,10 +436,10 @@ initialState _ =
   , board: defBoard
   }
 
-component :: forall output m t. H.Component t Unit output m
+component :: forall output t. H.Component t Unit output Aff
 component =
   H.mkComponent
     { initialState
     , render
-    , eval: H.mkEval $ H.defaultEval { handleAction = handleAction }
+    , eval: H.mkEval $ H.defaultEval { handleAction = handleAction, initialize = Just InitKeybinds }
     }
