@@ -197,7 +197,7 @@ keyboard kstate =
             ] <> extraProps)
         charToKey c = case c of
           'b' -> mkKeyButton (PressKeyButton KBack) [HP.id "back"] [backspaceText]
-          'e' -> mkKeyButton (PressKeyButton KEnter) [HP.id "enter"] $ [HH.text "ENTER"]
+          'e' -> mkKeyButton PressEnter [HP.id "enter"] $ [HH.text "ENTER"]
           's' -> mkKeyButton SolveGame [HP.id "solve"] $ [HH.text "Solve"]
           _ -> mkKeyButton (PressKeyButton $ KLetter c) colorPropArr $ [HH.text $ singleton c]
             where colorPropArr = fromMaybe [] $ Array.singleton <<< colorToProp <$> Map.lookup c kstate

@@ -4,7 +4,7 @@ import Prelude
 import Util
 import Wordle
 
-import Data.Array (replicate, range, (!!), length)
+import Data.Array (replicate, range, (!!), length, elem)
 import Data.Array as Array
 import Data.Map (Map, empty)
 import Data.Map as Map
@@ -28,6 +28,7 @@ import Web.HTML.Window (document, alert) as Web
 import Web.UIEvent.KeyboardEvent (KeyboardEvent)
 import Web.UIEvent.KeyboardEvent as KE
 import Web.UIEvent.KeyboardEvent.EventTypes as KET
+import WordList (dictWordList, wordleWordList)
 
 {- Types -}
 
@@ -59,9 +60,8 @@ defSolverState =
   { guesses: []
   }
 
-data Key = KEnter
+data Key = KLetter Char
          | KBack
-         | KLetter Char
 
 type State =
   { showInfo :: Boolean
@@ -96,6 +96,7 @@ data Action = SetInfoBoxVis Boolean
             | SolveGame
             | InitKeybinds
             | HandleKeypress KeyboardEvent
+            | PressEnter
 
 {- All Pages -}
 
@@ -109,6 +110,7 @@ handleAction = case _ of
   PressKeyButton k -> pressKeyButton k
   InitKeybinds -> initKeybinds
   HandleKeypress event -> handleKeypressEvent event
+  PressEnter -> pressEnter
   PressColorKey c -> pure unit -- TODO
   TestAllWords -> pure unit -- TODO
   Reset -> pure unit -- TODO
@@ -121,19 +123,39 @@ pressKeyButton k =
   do
     s <- H.get
     case s.currentPage of
-      Game gState ->
-        let wasWin = gameIsWin gState
-            gState' = gameStateKeyPress gState k
-            isWin = gameIsWin gState'
-            justWon = not wasWin && isWin
-            gState'' = gState' {isWin = wasWin || isWin}
-        in do H.put $ s { currentPage = Game gState''
-                        , board = gameRenderBoard gState''
-                        }
-              if justWon
-              then H.liftEffect $ Web.alert (successMessage $ length gState''.sentGuesses) =<< Web.window
-              else pure unit
+      Game gState -> let gState' = gameStateKeyPress gState k
+                     in H.put $ s { currentPage = Game gState'
+                                  , board = gameRenderBoard gState'
+                                  }
       _ -> pure unit
+
+pressEnter :: forall o. H.HalogenM State Action () o Aff Unit
+pressEnter = do
+  s <- H.get
+  case s.currentPage of
+    Game gState@{sentGuesses, currentGuess}
+      | String.length currentGuess /= wordLength -> pure unit
+      | not $ currentGuess `elem` (getWordList s) -> alert $ "`" <> currentGuess <> "` is not in the word list."
+      | otherwise -> do let wasWin = gameIsWin gState
+                        let gState' = gState {sentGuesses = sentGuesses <> [currentGuess], currentGuess = ""}
+                        let isWin = gameIsWin gState'
+                        let justWon = not wasWin && isWin
+                        let gState'' = gState' {isWin = wasWin || isWin}
+                        H.put $ s { currentPage = Game gState''
+                                  , board = gameRenderBoard gState''
+                                  }
+                        if justWon
+                        then alert <<< successMessage $ length gState''.sentGuesses
+                        else pure unit
+    _ -> pure unit -- TODO add functionality for solver page?
+
+getWordList :: State -> Array String
+getWordList s
+  | s.useFullDict = dictWordList
+  | otherwise = wordleWordList
+
+alert :: forall o. String -> H.HalogenM State Action () o Aff Unit
+alert s = H.liftEffect $ Web.alert s =<< Web.window
 
 gameIsWin :: GameState -> Boolean
 gameIsWin {sentGuesses, currentWord} = case Array.last sentGuesses of
@@ -165,7 +187,7 @@ handleKeypressEvent event = res
     k = KE.key event
     first = fromMaybe '_' <<< Array.head <<< toCharArray $ k
     res
-      | KE.key event == "Enter" = handleAction $ PressKeyButton KEnter
+      | KE.key event == "Enter" = handleAction $ PressEnter
       | KE.key event == "Backspace" = handleAction $ PressKeyButton KBack
       | String.length k == 1 && isLetter first = handleAction <<< PressKeyButton <<< KLetter <<< toUpper $ first
       | otherwise = pure unit
@@ -182,9 +204,6 @@ gameStateKeyPress state@{currentGuess} KBack =
   case Array.unsnoc (toCharArray currentGuess) of
     Nothing -> state
     Just {init} -> state {currentGuess = fromCharArray init}
-gameStateKeyPress state@{sentGuesses, currentGuess} KEnter
-  | String.length currentGuess /= wordLength = state
-  | otherwise = state {sentGuesses = sentGuesses <> [currentGuess], currentGuess = ""}
 
 gameRenderBoard :: GameState -> Board
 gameRenderBoard {currentWord, sentGuesses, currentGuess} =
