@@ -1,8 +1,8 @@
 module State where
 
 import Prelude
-import Wordle
 import Util
+import Wordle
 
 import Data.Array (replicate, range, (!!), length)
 import Data.Array as Array
@@ -87,7 +87,7 @@ data Action = SetInfoBoxVis Boolean
             | SetUseWordleWords
             | ChangePage Page
             | Reset
-            | PressKeyboardKey Key
+            | PressKeyButton Key
             | PressColorKey Color
             | GenerateGuess
             | RegenerateGuess
@@ -104,33 +104,47 @@ handleAction = case _ of
   SetUseDictWords -> H.modify_ (\s -> s {useFullDict = true})
   SetUseWordleWords -> H.modify_ (\s -> s {useFullDict = false})
   ChangePage newPage -> H.modify_ (\s -> s {currentPage = newPage})
-  PressKeyboardKey k -> H.modify_ (\s -> case s.currentPage of
-                                   Game gState -> s { currentPage = Game gState'
-                                                    , board = gameRenderBoard gState'
-                                                    }
-                                     where gState' = gameStateKeyPress gState k
-                                   _ -> s)
+  PressKeyButton k -> pressKeyButton k
   PressColorKey c -> pure unit -- TODO
   TestAllWords -> pure unit -- TODO
   Reset -> pure unit -- TODO
   GenerateGuess -> pure unit -- TODO
   RegenerateGuess -> pure unit -- TODO
   SolveGame -> pure unit -- TODO
-  InitKeybinds -> do
-    document <- H.liftEffect $ Web.document =<< Web.window
-    void <<< H.subscribe $
-      eventListener
-        KET.keyup
-        (HTMLDocument.toEventTarget document)
-        (map HandleKeypress <<< KE.fromEvent)
-  HandleKeypress event -> res
-    where k = KE.key event
-          first = fromMaybe '_' <<< Array.head <<< toCharArray $ k
-          res
-            | KE.key event == "Enter" = handleAction $ PressKeyboardKey KEnter
-            | KE.key event == "Backspace" = handleAction $ PressKeyboardKey KBack
-            | String.length k == 1 && isLetter first = handleAction <<< PressKeyboardKey <<< KLetter <<< toUpper $ first
-            | otherwise = pure unit
+  InitKeybinds -> initKeybinds
+  HandleKeypress event -> handleKeypressEvent event
+
+pressKeyButton :: forall o. Key -> H.HalogenM State Action () o Aff Unit
+pressKeyButton k =
+  H.modify_ (\s -> case s.currentPage of
+    Game gState -> s { currentPage = Game gState'
+                    , board = gameRenderBoard gState'
+                    }
+      where gState' = gameStateKeyPress gState k
+    _ -> s)
+
+initKeybinds :: forall o. H.HalogenM State Action () o Aff Unit
+initKeybinds = do
+  document <- H.liftEffect $ Web.document =<< Web.window
+  void <<< H.subscribe $
+    eventListener
+      KET.keyup
+      (HTMLDocument.toEventTarget document)
+      (map HandleKeypress <<< KE.fromEvent)
+
+handleKeypressEvent :: forall o. KeyboardEvent -> H.HalogenM State Action () o Aff Unit
+handleKeypressEvent event = res
+  where
+    k = KE.key event
+    first = fromMaybe '_' <<< Array.head <<< toCharArray $ k
+    res
+      | KE.key event == "Enter" = (handleAction $ PressKeyButton KEnter) *> checkForWin
+      | KE.key event == "Backspace" = handleAction $ PressKeyButton KBack
+      | String.length k == 1 && isLetter first = handleAction <<< PressKeyButton <<< KLetter <<< toUpper $ first
+      | otherwise = pure unit
+
+checkForWin :: forall o. H.HalogenM State Action () o Aff Unit
+checkForWin = pure unit
 
 {- Game-Page -}
 
