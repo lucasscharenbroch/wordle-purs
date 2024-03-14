@@ -82,14 +82,17 @@ type State =
   , board :: Board
   }
 
-initialState :: Int -> State
-initialState  seed =
+defState :: State
+defState =
   { showInfo: false
   , showSettings: false
   , useFullDict: true
-  , currentPage: Game (mkGameState seed dictWordList)
+  , currentPage: Solver defSolverState
   , board: defBoard
   }
+
+initialState :: Int -> State
+initialState  seed = defState {currentPage = Game $ mkGameState seed dictWordList}
 
 type KeyboardState = Map Char Color
 
@@ -124,12 +127,21 @@ handleAction = case _ of
   InitKeybinds -> initKeybinds
   HandleKeypress event -> handleKeypressEvent event
   PressEnter -> pressEnter
+  Reset -> resetState
   PressColorKey c -> pure unit -- TODO
   TestAllWords -> pure unit -- TODO
-  Reset -> pure unit -- TODO
   GenerateGuess -> pure unit -- TODO
   RegenerateGuess -> pure unit -- TODO
   SolveGame -> pure unit -- TODO
+
+resetState :: forall o. H.HalogenM State Action () o Aff Unit
+resetState =
+  do state <- H.get
+     state' <- case state.currentPage of
+                 Game _ -> do gState <- mkGameStateM
+                              pure $ defState {useFullDict = state.useFullDict, currentPage = Game $ gState}
+                 Solver _ -> pure $ defState {useFullDict = state.useFullDict}
+     H.put state'
 
 mkGameStateM :: forall o. H.HalogenM State Action () o Aff GameState
 mkGameStateM =
