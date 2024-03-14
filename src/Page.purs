@@ -45,11 +45,14 @@ container state =
   HH.div
     [HP.id "container"]
     [ header state.currentPage
-    , mkBoard state.board
+    , mkBoard (getBoard state)
     , (case state.currentPage of
         (Game {keyboardState}) -> keyboard keyboardState
         (Solver _) -> solverButtons)
     ]
+  where getBoard state = case state.currentPage of
+          Game {board} -> board
+          Solver {board} -> board
 
 header :: forall w. Page -> HH.HTML w Action
 header page =

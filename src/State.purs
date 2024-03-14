@@ -42,6 +42,7 @@ type GameState =
   , sentGuesses :: Array String
   , currentGuess :: String
   , isWin :: Boolean
+  , board :: Board
   }
 
 mkGameSeed :: Array String -> Effect Int
@@ -60,15 +61,18 @@ mkGameState seed wordList =
   , sentGuesses: []
   , currentGuess: ""
   , isWin: false
+  , board: defBoard
   }
 
 type SolverState =
   { guesses :: Array String
+  , board :: Board
   }
 
 defSolverState :: SolverState
 defSolverState =
   { guesses: []
+  , board: defBoard
   }
 
 data Key = KLetter Char
@@ -79,7 +83,6 @@ type State =
   , showSettings :: Boolean
   , useFullDict :: Boolean
   , currentPage :: Page
-  , board :: Board
   }
 
 defState :: State
@@ -88,7 +91,6 @@ defState =
   , showSettings: false
   , useFullDict: true
   , currentPage: Solver defSolverState
-  , board: defBoard
   }
 
 initialState :: Int -> State
@@ -155,10 +157,8 @@ pressKeyButton k =
   do
     s <- H.get
     case s.currentPage of
-      Game gState -> let gState' = gameStateKeyPress gState k
-                     in H.put $ s { currentPage = Game gState'
-                                  , board = gameRenderBoard gState'
-                                  }
+      Game gState -> let gState' = gameRerenderBoard $ gameStateKeyPress gState k
+                     in H.put $ s {currentPage = Game gState'}
       _ -> pure unit
 
 pressEnter :: forall o. H.HalogenM State Action () o Aff Unit
@@ -172,10 +172,8 @@ pressEnter = do
                         let gState' = gState {sentGuesses = sentGuesses <> [currentGuess], currentGuess = ""}
                         let isWin = gameIsWin gState'
                         let justWon = not wasWin && isWin
-                        let gState'' = gState' {isWin = wasWin || isWin}
-                        H.put $ s { currentPage = Game gState''
-                                  , board = gameRenderBoard gState''
-                                  }
+                        let gState'' = gameRerenderBoard $ gState' {isWin = wasWin || isWin}
+                        H.put $ s {currentPage = Game gState''}
                         if justWon
                         then alert <<< successMessage $ length gState''.sentGuesses
                         else pure unit
@@ -237,12 +235,13 @@ gameStateKeyPress state@{currentGuess} KBack =
     Nothing -> state
     Just {init} -> state {currentGuess = fromCharArray init}
 
-gameRenderBoard :: GameState -> Board
-gameRenderBoard {currentWord, sentGuesses, currentGuess} =
-  map (colorRow currentWord) sentGuesses
-  <> [mkPaddedRow currentGuess]
-  <> replicate (maxGuesses - length sentGuesses - 1) (replicate wordLength defCell)
-  where mkPaddedRow s = map (\c -> {color: None, letter: c}) (toCharArray s) <> replicate (wordLength - String.length s) defCell
+gameRerenderBoard :: GameState -> GameState
+gameRerenderBoard gState@{currentWord, sentGuesses, currentGuess} = gState {board = board'}
+  where board' =
+          map (colorRow currentWord) sentGuesses
+          <> (if length sentGuesses == maxGuesses then [] else [mkPaddedRow currentGuess])
+          <> replicate (maxGuesses - length sentGuesses - 1) (replicate wordLength defCell)
+          where mkPaddedRow s = map (\c -> {color: None, letter: c}) (toCharArray s) <> replicate (wordLength - String.length s) defCell
 
 colorRow :: String -> String -> Array Cell
 colorRow correctWord = gradeGuess (toCharArray correctWord) <<< toCharArray
