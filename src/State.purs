@@ -4,7 +4,7 @@ import Prelude
 import Util
 import Wordle
 
-import Data.Array (replicate, range, (!!), length, elem)
+import Data.Array (replicate, range, (!!), length, elem, foldl)
 import Data.Array as Array
 import Data.Map (Map, empty)
 import Data.Map as Map
@@ -30,6 +30,7 @@ import Web.UIEvent.KeyboardEvent (KeyboardEvent)
 import Web.UIEvent.KeyboardEvent as KE
 import Web.UIEvent.KeyboardEvent.EventTypes as KET
 import WordList (dictWordList, wordleWordList)
+import Data.Tuple
 
 {- Types -}
 
@@ -37,7 +38,7 @@ data Page = Game GameState
           | Solver SolverState
 
 type GameState =
-  { keyboardState :: KeyboardState
+  { keyboard :: KeyboardState
   , currentWord :: String
   , sentGuesses :: Array String
   , currentGuess :: String
@@ -54,7 +55,7 @@ mkDefGameSeed = mkGameSeed dictWordList
 
 mkGameState :: Int -> Array String -> GameState
 mkGameState seed wordList =
-  { keyboardState: empty
+  { keyboard: empty
   , currentWord: case wordList !! seed of
                    Just s -> s
                    _ -> "BUGGY" -- shouldn't happen
@@ -67,12 +68,16 @@ mkGameState seed wordList =
 type SolverState =
   { guesses :: Array String
   , board :: Board
+  , sentColorings :: Array (Array Color)
+  , currentColoring :: Array Color
   }
 
 defSolverState :: SolverState
 defSolverState =
   { guesses: []
   , board: defBoard
+  , sentColorings: []
+  , currentColoring: []
   }
 
 data Key = KLetter Char
@@ -157,7 +162,7 @@ pressKeyButton k =
   do
     s <- H.get
     case s.currentPage of
-      Game gState -> let gState' = gameRerenderBoard $ gameStateKeyPress gState k
+      Game gState -> let gState' = updateBoardAndKeyboard $ gameStateKeyPress gState k
                      in H.put $ s {currentPage = Game gState'}
       _ -> pure unit
 
@@ -172,7 +177,7 @@ pressEnter = do
                         let gState' = gState {sentGuesses = sentGuesses <> [currentGuess], currentGuess = ""}
                         let isWin = gameIsWin gState'
                         let justWon = not wasWin && isWin
-                        let gState'' = gameRerenderBoard $ gState' {isWin = wasWin || isWin}
+                        let gState'' = updateBoardAndKeyboard $ gState' {isWin = wasWin || isWin}
                         H.put $ s {currentPage = Game gState''}
                         if justWon
                         then alert <<< successMessage $ length gState''.sentGuesses
@@ -235,13 +240,16 @@ gameStateKeyPress state@{currentGuess} KBack =
     Nothing -> state
     Just {init} -> state {currentGuess = fromCharArray init}
 
-gameRerenderBoard :: GameState -> GameState
-gameRerenderBoard gState@{currentWord, sentGuesses, currentGuess} = gState {board = board'}
-  where board' =
-          map (colorRow currentWord) sentGuesses
+updateBoardAndKeyboard :: GameState -> GameState
+updateBoardAndKeyboard gState@{currentWord, sentGuesses, currentGuess} = gState {board = board', keyboard = keyboard'}
+  where cells = map (colorRow currentWord) sentGuesses
+        board' =
+          cells
           <> (if length sentGuesses == maxGuesses then [] else [mkPaddedRow currentGuess])
           <> replicate (maxGuesses - length sentGuesses - 1) (replicate wordLength defCell)
           where mkPaddedRow s = map (\c -> {color: None, letter: c}) (toCharArray s) <> replicate (wordLength - String.length s) defCell
+        keyboard' = foldl step empty <<< Array.concat $ cells
+        step m {letter, color} = Map.insertWith greener letter color m
 
 colorRow :: String -> String -> Array Cell
 colorRow correctWord = gradeGuess (toCharArray correctWord) <<< toCharArray

@@ -47,7 +47,7 @@ container state =
     [ header state.currentPage
     , mkBoard (getBoard state)
     , (case state.currentPage of
-        (Game {keyboardState}) -> keyboard keyboardState
+        (Game {keyboard}) -> mkKeyboard keyboard
         (Solver _) -> solverButtons)
     ]
   where getBoard state = case state.currentPage of
@@ -186,8 +186,8 @@ settingsBox state =
 
 {- Game-Page -}
 
-keyboard :: forall w. KeyboardState -> HH.HTML w Action
-keyboard kstate =
+mkKeyboard :: forall w. KeyboardState -> HH.HTML w Action
+mkKeyboard kstate =
   HH.div
     [HP.id "keyboard"]
     keys

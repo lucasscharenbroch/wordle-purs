@@ -9,6 +9,13 @@ import Data.String.CodeUnits (toCharArray)
 
 data Color = Green | Yellow | Gray | None
 
+greener :: Color -> Color -> Color
+greener Green _ = Green
+greener _ Green = Green
+greener Yellow _ = Yellow
+greener _ Yellow = Yellow
+greener _ _ = Gray
+
 type Cell =
   { color :: Color
   , letter :: Char
