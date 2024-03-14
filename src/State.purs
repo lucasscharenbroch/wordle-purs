@@ -24,7 +24,7 @@ import Halogen.VDom.Driver (runUI)
 import Util (backspaceText, whenElem)
 import Web.HTML (window) as Web
 import Web.HTML.HTMLDocument as HTMLDocument
-import Web.HTML.Window (document) as Web
+import Web.HTML.Window (document, alert) as Web
 import Web.UIEvent.KeyboardEvent (KeyboardEvent)
 import Web.UIEvent.KeyboardEvent as KE
 import Web.UIEvent.KeyboardEvent.EventTypes as KET
@@ -118,12 +118,37 @@ handleAction = case _ of
 
 pressKeyButton :: forall o. Key -> H.HalogenM State Action () o Aff Unit
 pressKeyButton k =
-  H.modify_ (\s -> case s.currentPage of
-    Game gState -> s { currentPage = Game gState'
-                    , board = gameRenderBoard gState'
-                    }
-      where gState' = gameStateKeyPress gState k
-    _ -> s)
+  do
+    s <- H.get
+    case s.currentPage of
+      Game gState ->
+        let wasWin = gameIsWin gState
+            gState' = gameStateKeyPress gState k
+            isWin = gameIsWin gState'
+            justWon = not wasWin && isWin
+            gState'' = gState' {isWin = wasWin || isWin}
+        in do H.put $ s { currentPage = Game gState''
+                        , board = gameRenderBoard gState''
+                        }
+              if justWon
+              then H.liftEffect $ Web.alert (successMessage $ length gState''.sentGuesses) =<< Web.window
+              else pure unit
+      _ -> pure unit
+
+gameIsWin :: GameState -> Boolean
+gameIsWin {sentGuesses, currentWord} = case Array.last sentGuesses of
+  Nothing -> false
+  Just s -> allGreen (gradeGuess_ currentWord s)
+    where allGreen = Array.all (\x -> isGreen x.color)
+          isGreen Green = true
+          isGreen _ = false
+
+successMessage :: Int -> String
+successMessage 1 = "First try? No way!"
+successMessage 2 = "Amazing! You're incredible!"
+successMessage 3 = "Wonderful! Very impressive."
+successMessage 4 = "Nice job! :)"
+successMessage _ = "Nice job! Never worried."
 
 initKeybinds :: forall o. H.HalogenM State Action () o Aff Unit
 initKeybinds = do
@@ -140,33 +165,10 @@ handleKeypressEvent event = res
     k = KE.key event
     first = fromMaybe '_' <<< Array.head <<< toCharArray $ k
     res
-      | KE.key event == "Enter" = (handleAction $ PressKeyButton KEnter) *> checkAndHandleWin
+      | KE.key event == "Enter" = handleAction $ PressKeyButton KEnter
       | KE.key event == "Backspace" = handleAction $ PressKeyButton KBack
       | String.length k == 1 && isLetter first = handleAction <<< PressKeyButton <<< KLetter <<< toUpper $ first
       | otherwise = pure unit
-
-checkAndHandleWin :: forall o. H.HalogenM State Action () o Aff Unit
-checkAndHandleWin =
-  do
-    isWin <- gameIsWin
-    if isWin
-    then H.modify_ (\s -> case s.currentPage of
-                            Game gstate -> s {currentPage = Game $ gstate {isWin = true}}
-                            _ -> s)
-    else pure unit
-
-gameIsWin :: forall o. H.HalogenM State Action () o Aff Boolean
-gameIsWin =
-  do
-    state <- H.get
-    case state.currentPage of
-      Game {sentGuesses, currentWord} -> case Array.last sentGuesses of
-        Nothing -> pure false
-        Just s -> pure $ allGreen (gradeGuess_ currentWord s)
-          where allGreen = Array.all (\x -> isGreen x.color)
-                isGreen Green = true
-                isGreen _ = false
-      _ -> pure false
 
 {- Game-Page -}
 
