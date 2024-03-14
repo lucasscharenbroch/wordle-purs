@@ -57,24 +57,9 @@ defSolverState =
   { guesses: []
   }
 
-type Board = Array (Array Cell) -- 6 x 5
-
-defBoard :: Board
-defBoard = replicate 6 (replicate 5 defCell)
-
-data Color = Green | Yellow | Gray | None
-
 data Key = KEnter
          | KBack
          | KLetter Char
-
-type Cell =
-  { color :: Color
-  , letter :: Char
-  }
-
-defCell :: Cell
-defCell = {color: None, letter: ' '}
 
 type State =
   { showInfo :: Boolean
@@ -163,14 +148,14 @@ gameStateKeyPress state@{sentGuesses, currentGuess} KEnter
   | otherwise = state {sentGuesses = sentGuesses <> [currentGuess], currentGuess = ""}
 
 gameRenderBoard :: GameState -> Board
-gameRenderBoard {sentGuesses, currentGuess} =
-  map colorRow sentGuesses
+gameRenderBoard {currentWord, sentGuesses, currentGuess} =
+  map (colorRow currentWord) sentGuesses
   <> [mkPaddedRow currentGuess]
   <> replicate (maxGuesses - length sentGuesses - 1) (replicate wordLength defCell)
   where mkPaddedRow s = map (\c -> {color: None, letter: c}) (toCharArray s) <> replicate (wordLength - String.length s) defCell
 
-colorRow :: String -> Array Cell
-colorRow = map (\c -> {color: Green, letter: c}) <<< toCharArray -- TODO
+colorRow :: String -> String -> Array Cell
+colorRow correctWord = gradeGuess (toCharArray correctWord) <<< toCharArray
 
 {- Solver-Page -}
 

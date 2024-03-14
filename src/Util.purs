@@ -34,3 +34,8 @@ toUpper c =  fromMaybe '_' <<< Array.head <<< toCharArray <<< String.toUpper <<<
 
 isLetter :: Char -> Boolean
 isLetter = Unicode.isLetter <<< codePointFromChar
+
+blackbird :: forall a b c d. (c -> d) -> (a -> b -> c) -> a -> b -> d
+blackbird = (<<<) <<< (<<<)
+
+infixr 8 blackbird as .:

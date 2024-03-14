@@ -5,7 +5,7 @@ import Util
 import Page
 import State
 
-import Data.Array (replicate, range, (!!), length)
+import Data.Array (range, (!!), length)
 import Data.Array as Array
 import Data.Map (Map, empty)
 import Data.Map as Map
