@@ -4,6 +4,8 @@ import Prelude
 
 import Data.Array
 import Data.Tuple
+import Data.Function (on)
+import Data.String.CodeUnits (toCharArray)
 
 data Color = Green | Yellow | Gray | None
 
@@ -27,6 +29,9 @@ wordLength = 5
 
 maxGuesses :: Int
 maxGuesses = 6
+
+gradeGuess_ :: String -> String -> Array Cell
+gradeGuess_ = on gradeGuess toCharArray
 
 gradeGuess :: Array Char -> Array Char -> Array Cell
 gradeGuess correct given = zipWith (\letter color -> {letter, color}) given $ colors

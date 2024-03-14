@@ -39,6 +39,7 @@ type GameState =
   , currentWord :: String
   , sentGuesses :: Array String
   , currentGuess :: String
+  , isWin :: Boolean
   }
 
 defGameState :: GameState
@@ -47,6 +48,7 @@ defGameState =
   , currentWord: "GREAT" -- TODO generate word
   , sentGuesses: []
   , currentGuess: ""
+  , isWin: false
   }
 type SolverState =
   { guesses :: Array String
@@ -105,14 +107,14 @@ handleAction = case _ of
   SetUseWordleWords -> H.modify_ (\s -> s {useFullDict = false})
   ChangePage newPage -> H.modify_ (\s -> s {currentPage = newPage})
   PressKeyButton k -> pressKeyButton k
+  InitKeybinds -> initKeybinds
+  HandleKeypress event -> handleKeypressEvent event
   PressColorKey c -> pure unit -- TODO
   TestAllWords -> pure unit -- TODO
   Reset -> pure unit -- TODO
   GenerateGuess -> pure unit -- TODO
   RegenerateGuess -> pure unit -- TODO
   SolveGame -> pure unit -- TODO
-  InitKeybinds -> initKeybinds
-  HandleKeypress event -> handleKeypressEvent event
 
 pressKeyButton :: forall o. Key -> H.HalogenM State Action () o Aff Unit
 pressKeyButton k =
@@ -138,18 +140,39 @@ handleKeypressEvent event = res
     k = KE.key event
     first = fromMaybe '_' <<< Array.head <<< toCharArray $ k
     res
-      | KE.key event == "Enter" = (handleAction $ PressKeyButton KEnter) *> checkForWin
+      | KE.key event == "Enter" = (handleAction $ PressKeyButton KEnter) *> checkAndHandleWin
       | KE.key event == "Backspace" = handleAction $ PressKeyButton KBack
       | String.length k == 1 && isLetter first = handleAction <<< PressKeyButton <<< KLetter <<< toUpper $ first
       | otherwise = pure unit
 
-checkForWin :: forall o. H.HalogenM State Action () o Aff Unit
-checkForWin = pure unit
+checkAndHandleWin :: forall o. H.HalogenM State Action () o Aff Unit
+checkAndHandleWin =
+  do
+    isWin <- gameIsWin
+    if isWin
+    then H.modify_ (\s -> case s.currentPage of
+                            Game gstate -> s {currentPage = Game $ gstate {isWin = true}}
+                            _ -> s)
+    else pure unit
+
+gameIsWin :: forall o. H.HalogenM State Action () o Aff Boolean
+gameIsWin =
+  do
+    state <- H.get
+    case state.currentPage of
+      Game {sentGuesses, currentWord} -> case Array.last sentGuesses of
+        Nothing -> pure false
+        Just s -> pure $ allGreen (gradeGuess_ currentWord s)
+          where allGreen = Array.all (\x -> isGreen x.color)
+                isGreen Green = true
+                isGreen _ = false
+      _ -> pure false
 
 {- Game-Page -}
 
 gameStateKeyPress :: GameState -> Key -> GameState
-gameStateKeyPress state@{sentGuesses, currentGuess} (KLetter c)
+gameStateKeyPress state@{sentGuesses, currentGuess, isWin} (KLetter c)
+  | isWin = state
   | length sentGuesses >= maxGuesses = state
   | String.length currentGuess < wordLength = state {currentGuess = currentGuess <> singleton c}
   | otherwise = state

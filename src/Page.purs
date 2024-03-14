@@ -196,10 +196,10 @@ keyboard kstate =
             , HE.onClick \_ -> action
             ] <> extraProps)
         charToKey c = case c of
-          'b' -> mkKeyButton (PressKeyboardKey KBack) [HP.id "back"] [backspaceText]
-          'e' -> mkKeyButton (PressKeyboardKey KEnter) [HP.id "enter"] $ [HH.text "ENTER"]
+          'b' -> mkKeyButton (PressKeyButton KBack) [HP.id "back"] [backspaceText]
+          'e' -> mkKeyButton (PressKeyButton KEnter) [HP.id "enter"] $ [HH.text "ENTER"]
           's' -> mkKeyButton SolveGame [HP.id "solve"] $ [HH.text "Solve"]
-          _ -> mkKeyButton (PressKeyboardKey $ KLetter c) colorPropArr $ [HH.text $ singleton c]
+          _ -> mkKeyButton (PressKeyButton $ KLetter c) colorPropArr $ [HH.text $ singleton c]
             where colorPropArr = fromMaybe [] $ Array.singleton <<< colorToProp <$> Map.lookup c kstate
                   colorToProp = case _ of
                     Green -> HP.style $ "background-color: rgb(106, 170, 100);"
