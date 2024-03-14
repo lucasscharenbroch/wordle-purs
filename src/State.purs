@@ -14,6 +14,7 @@ import Data.String as String
 import Data.String.CodeUnits (charAt, fromCharArray, singleton, toCharArray)
 import Effect (Effect)
 import Effect.Aff (Aff)
+import Effect.Random (randomInt)
 import Halogen as H
 import Halogen.Aff as HA
 import Halogen.HTML as HH
@@ -43,14 +44,24 @@ type GameState =
   , isWin :: Boolean
   }
 
-defGameState :: GameState
-defGameState =
+mkGameSeed :: Array String -> Effect Int
+mkGameSeed wordList = randomInt 0 (length wordList - 1)
+
+-- used in initial call of mkGameState on start-up
+mkDefGameSeed :: Effect Int
+mkDefGameSeed = mkGameSeed dictWordList
+
+mkGameState :: Int -> Array String -> GameState
+mkGameState seed wordList =
   { keyboardState: empty
-  , currentWord: "GREAT" -- TODO generate word
+  , currentWord: case wordList !! seed of
+                   Just s -> s
+                   _ -> "BUGGY" -- shouldn't happen
   , sentGuesses: []
   , currentGuess: ""
   , isWin: false
   }
+
 type SolverState =
   { guesses :: Array String
   }
@@ -71,12 +82,12 @@ type State =
   , board :: Board
   }
 
-initialState :: Unit -> State
-initialState _ =
+initialState :: Int -> State
+initialState  seed =
   { showInfo: false
   , showSettings: false
   , useFullDict: true
-  , currentPage: Game defGameState
+  , currentPage: Game (mkGameState seed dictWordList)
   , board: defBoard
   }
 
@@ -87,7 +98,8 @@ data Action = SetInfoBoxVis Boolean
             | TestAllWords
             | SetUseDictWords
             | SetUseWordleWords
-            | ChangePage Page
+            | ChangePageToGame
+            | ChangePageToSolver
             | Reset
             | PressKeyButton Key
             | PressColorKey Color
@@ -106,7 +118,8 @@ handleAction = case _ of
   SetSettingsBoxVis isVis -> H.modify_ (\s -> s {showSettings = isVis})
   SetUseDictWords -> H.modify_ (\s -> s {useFullDict = true})
   SetUseWordleWords -> H.modify_ (\s -> s {useFullDict = false})
-  ChangePage newPage -> H.modify_ (\s -> s {currentPage = newPage})
+  ChangePageToSolver -> H.modify_ (\s -> s {currentPage = Solver defSolverState})
+  ChangePageToGame -> mkGameStateM >>= \gs -> H.modify_ (\s -> s {currentPage = Game gs})
   PressKeyButton k -> pressKeyButton k
   InitKeybinds -> initKeybinds
   HandleKeypress event -> handleKeypressEvent event
@@ -117,6 +130,13 @@ handleAction = case _ of
   GenerateGuess -> pure unit -- TODO
   RegenerateGuess -> pure unit -- TODO
   SolveGame -> pure unit -- TODO
+
+mkGameStateM :: forall o. H.HalogenM State Action () o Aff GameState
+mkGameStateM =
+  do state <- H.get
+     let wordList = getWordList state
+     seed <- H.liftEffect <<< mkGameSeed $ wordList
+     pure $ mkGameState seed wordList
 
 pressKeyButton :: forall o. Key -> H.HalogenM State Action () o Aff Unit
 pressKeyButton k =

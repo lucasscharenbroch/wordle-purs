@@ -1,9 +1,9 @@
 module Main where
 
-import Prelude
-import Util
 import Page
+import Prelude
 import State
+import Util
 
 import Data.Array (range, (!!), length)
 import Data.Array as Array
@@ -29,13 +29,16 @@ import Web.HTML.Window (document) as Web
 import Web.UIEvent.KeyboardEvent (KeyboardEvent)
 import Web.UIEvent.KeyboardEvent as KE
 import Web.UIEvent.KeyboardEvent.EventTypes as KET
+import WordList (dictWordList)
 
 main :: Effect Unit
-main = HA.runHalogenAff do
-  body <- HA.awaitBody
-  runUI component unit body
+main =
+  do gameSeed <- mkDefGameSeed
+     HA.runHalogenAff
+      do body <- HA.awaitBody
+         runUI component gameSeed body
 
-component :: forall output t. H.Component t Unit output Aff
+component :: forall output t. H.Component t Int output Aff
 component =
   H.mkComponent
     { initialState

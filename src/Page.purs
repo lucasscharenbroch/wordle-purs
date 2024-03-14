@@ -79,8 +79,8 @@ header page =
         [HP.id "headerButtons2"]
         [ HH.button
             [HE.onClick \_ -> (case page of
-                                Game _ -> ChangePage $ Solver defSolverState
-                                Solver _ -> ChangePage $ Game defGameState)]
+                                Game _ -> ChangePageToSolver
+                                Solver _ -> ChangePageToGame)]
             [HH.text (case page of
                         Game _ -> "Solver"
                         Solver _ -> "Game")]
