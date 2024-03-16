@@ -48,3 +48,9 @@ id x = x
 
 countIntoMap :: forall a. Ord a => Array a -> Map a Int
 countIntoMap = foldl (\m k -> Map.insertWith (+) k 1 m) Map.empty
+
+mapWithKey :: forall k a b. Ord k => (k -> a -> b) -> Map k a -> Map k b
+mapWithKey f = Map.mapMaybeWithKey (pure .: f)
+
+lookupOr :: forall k v. Ord k => v -> k -> Map k v -> v
+lookupOr v = fromMaybe v .: Map.lookup

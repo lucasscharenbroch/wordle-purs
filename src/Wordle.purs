@@ -1,12 +1,12 @@
 module Wordle where
 
 import Data.Array
-import Data.Foldable as Foldable
 import Data.Maybe
 import Data.Tuple
 import Prelude
 import Util
 
+import Data.Foldable as Foldable
 import Data.Function (on)
 import Data.Map (Map)
 import Data.Map as Map
@@ -64,16 +64,25 @@ wordsFittingBoard words board = filter fitsConstraints words
     fitsConstraints s = fitsPosConstraints board s && fitsCntConstraints board s
 
 -- yellows => net minimum char count
+-- grays => net maximum char count
 fitsCntConstraints :: Board -> String -> Boolean
 fitsCntConstraints board s = Map.intersection minCnts guessCnts == minCnts
                           && Foldable.all id (Map.intersectionWith (<=) minCnts guessCnts)
+                          && Foldable.all id (Map.intersectionWith (>=) maxCnts guessCnts')
   where
     minCnts = foldl (Map.unionWith max) Map.empty <<< map rowMinCnts $ board
-    rowMinCnts = countIntoMap <<< map (\c -> c.letter) <<< filter (\c -> c.color == Yellow)
+    maxCnts = foldl Map.union Map.empty $ map rowMaxCnts $ board
+    rowToColorCountMap color = countIntoMap <<< map (\c -> c.letter) <<< filter (\c -> c.color == color)
+    rowMinCnts = rowToColorCountMap Yellow
+    rowMaxCnts row = mapWithKey (\c _ -> lookupOr 0 c yellows + lookupOr 0 c greens) grays
+      where grays = rowToColorCountMap Gray $ row
+            yellows = rowToColorCountMap Yellow $ row
+            greens = rowToColorCountMap Green $ row
     guessCnts = countIntoMap <<< toCharArray $ s
+    guessCnts' = foldl (\m c -> Map.insertWith max c 0 m) guessCnts <<< toCharArray $ "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 -- greens => exact position match
--- yellows => position mismatch
+-- yellows, grays => position mismatch
 fitsPosConstraints :: Board -> String -> Boolean
 fitsPosConstraints board s = all id $ zipWith ($) charFns (toCharArray s)
   where
@@ -83,7 +92,8 @@ fitsPosConstraints board s = all id $ zipWith ($) charFns (toCharArray s)
       case color of
         Green -> \c -> c == letter
         Yellow -> \c -> c /= letter
-        _ -> const true
+        Gray -> \c -> c /= letter
+        None -> const true
 
 pickGuess :: Array String -> Maybe String
 pickGuess = head -- TODO
