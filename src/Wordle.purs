@@ -85,5 +85,5 @@ fitsPosConstraints board s = all id $ zipWith ($) charFns (toCharArray s)
         Yellow -> \c -> c /= letter
         _ -> const true
 
--- pickGuess :: Array String -> Maybe String
--- pickGuess = ?what
+pickGuess :: Array String -> Maybe String
+pickGuess = head -- TODO

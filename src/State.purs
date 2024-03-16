@@ -1,10 +1,11 @@
 module State where
 
+import Data.Tuple
 import Prelude
 import Util
 import Wordle
 
-import Data.Array (replicate, range, (!!), length, elem, foldl)
+import Data.Array (elem, foldl, length, range, replicate, uncons, zipWith, (!!), (\\), unsnoc, take)
 import Data.Array as Array
 import Data.Map (Map, empty)
 import Data.Map as Map
@@ -30,7 +31,6 @@ import Web.UIEvent.KeyboardEvent (KeyboardEvent)
 import Web.UIEvent.KeyboardEvent as KE
 import Web.UIEvent.KeyboardEvent.EventTypes as KET
 import WordList (dictWordList, wordleWordList)
-import Data.Tuple
 
 {- Types -}
 
@@ -70,6 +70,7 @@ type SolverState =
   , board :: Board
   , sentColorings :: Array (Array Color)
   , currentColoring :: Array Color
+  , invalidWords :: Array String
   }
 
 defSolverState :: SolverState
@@ -78,6 +79,7 @@ defSolverState =
   , board: defBoard
   , sentColorings: []
   , currentColoring: []
+  , invalidWords: []
   }
 
 data Key = KLetter Char
@@ -135,10 +137,10 @@ handleAction = case _ of
   HandleKeypress event -> handleKeypressEvent event
   PressEnter -> pressEnter
   Reset -> resetState
-  PressColorKey c -> pure unit -- TODO
+  GenerateGuess -> generateGuess
+  RegenerateGuess -> regenerateGuess
+  PressColorKey c -> pressColorButton c
   TestAllWords -> pure unit -- TODO
-  GenerateGuess -> pure unit -- TODO
-  RegenerateGuess -> pure unit -- TODO
   SolveGame -> pure unit -- TODO
 
 resetState :: forall o. H.HalogenM State Action () o Aff Unit
@@ -250,10 +252,54 @@ updateBoardAndKeyboard gState@{currentWord, sentGuesses, currentGuess} = gState 
           where mkPaddedRow s = map (\c -> {color: None, letter: c}) (toCharArray s) <> replicate (wordLength - String.length s) defCell
         keyboard' = foldl step empty <<< Array.concat $ cells
         step m {letter, color} = Map.insertWith greener letter color m
-
-colorRow :: String -> String -> Array Cell
-colorRow correctWord = gradeGuess (toCharArray correctWord) <<< toCharArray
+        colorRow :: String -> String -> Array Cell
+        colorRow correctWord = gradeGuess (toCharArray correctWord) <<< toCharArray
 
 {- Solver-Page -}
 
--- TODO
+generateGuess :: forall o. H.HalogenM State Action () o Aff Unit
+generateGuess =
+  do state <- H.get
+     case state.currentPage of
+       Game _ -> pure unit
+       Solver sState@{guesses, sentColorings, currentColoring, board, invalidWords}
+        | length guesses == maxGuesses -> pure unit
+        | length guesses /= 0 && length currentColoring < wordLength -> pure unit
+        | otherwise -> let possibleGuesses = wordsFittingBoard (getWordList state) board \\ invalidWords
+                       in case pickGuess possibleGuesses of
+                            Nothing -> alert "Out of valid words."
+                            Just s -> H.put $ state {currentPage = Solver sState'}
+                              where
+                                Tuple sentColorings' currentColoring' = case length guesses of
+                                  0 -> Tuple sentColorings currentColoring
+                                  _ -> Tuple (sentColorings <> [currentColoring]) []
+                                sState' = updateSolverBoard $
+                                               sState { guesses = sState.guesses <> [s]
+                                                 , sentColorings = sentColorings'
+                                                 , currentColoring = currentColoring'
+                                                 }
+
+regenerateGuess :: forall o. H.HalogenM State Action () o Aff Unit
+regenerateGuess = pure unit
+
+pressColorButton :: forall o. Color -> H.HalogenM State Action () o Aff Unit
+pressColorButton color =
+  do state <- H.get
+     case state.currentPage of
+      Solver sState@{currentColoring, guesses} -> H.put state {currentPage = Solver sState'}
+        where sState' = updateSolverBoard $ sState {currentColoring = coloring'}
+              coloring'
+                | length guesses == 0 = currentColoring
+                | color == None = case unsnoc currentColoring of
+                  Just {init, last} -> init
+                  Nothing -> currentColoring
+                | otherwise = take 5 $ currentColoring <> [color]
+      _ -> pure unit
+
+updateSolverBoard :: SolverState -> SolverState
+updateSolverBoard sState@{guesses, sentColorings, currentColoring} = sState {board = board'}
+  where colorings = sentColorings <> [currentColoring <> replicate 5 None]
+        board' =
+          zipWith toCells guesses colorings
+          <> replicate (maxGuesses - length guesses) (replicate 5 {letter: ' ', color: None})
+        toCells s colors = zipWith (\letter color -> {letter, color}) (toCharArray s) colors
