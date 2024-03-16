@@ -5,6 +5,7 @@ import Prelude
 import Util
 import Wordle
 
+import Control.Monad.Rec.Class (forever)
 import Data.Array (elem, foldl, length, range, replicate, uncons, zipWith, (!!), (\\), unsnoc, take)
 import Data.Array as Array
 import Data.Map (Map, empty)
@@ -15,6 +16,8 @@ import Data.String as String
 import Data.String.CodeUnits (charAt, fromCharArray, singleton, toCharArray)
 import Effect (Effect)
 import Effect.Aff (Aff)
+import Effect.Aff as Aff
+import Effect.Aff.Class (class MonadAff)
 import Effect.Random (randomInt)
 import Halogen as H
 import Halogen.Aff as HA
@@ -22,6 +25,7 @@ import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Halogen.Query.Event (eventListener)
+import Halogen.Subscription as HS
 import Halogen.VDom.Driver (runUI)
 import Util (backspaceText, whenElem)
 import Web.HTML (window) as Web
@@ -37,12 +41,40 @@ import WordList (dictWordList, wordleWordList)
 data Page = Game GameState
           | Solver SolverState
 
+data TestStatus = Testing H.SubscriptionId TestState
+                  | DoneTesting TestState
+                  | NotTesting
+
+type TestState =
+  { wordsToGo :: Array String
+  , one :: Int
+  , two :: Int
+  , three :: Int
+  , four :: Int
+  , five :: Int
+  , six :: Int
+  , failed :: Int
+  }
+
+mkDefTestState :: Array String -> TestState
+mkDefTestState wordsToGo =
+  { wordsToGo
+  , one: 0
+  , two: 0
+  , three: 0
+  , four: 0
+  , five: 0
+  , six: 0
+  , failed: 0
+  }
+
 type GameState =
   { keyboard :: KeyboardState
   , currentWord :: String
   , sentGuesses :: Array String
   , currentGuess :: String
   , board :: Board
+  , testStatus :: TestStatus
   }
 
 mkGameSeed :: Array String -> Effect Int
@@ -61,6 +93,7 @@ mkGameState seed wordList =
   , sentGuesses: []
   , currentGuess: ""
   , board: defBoard
+  , testStatus: NotTesting
   }
 
 type SolverState =
@@ -119,6 +152,7 @@ data Action = SetInfoBoxVis Boolean
             | InitKeybinds
             | HandleKeypress KeyboardEvent
             | PressEnter
+            | TestStep
 
 {- All Pages -}
 
@@ -139,7 +173,8 @@ handleAction = case _ of
   RegenerateGuess -> regenerateGuess
   PressColorKey c -> pressColorButton c
   SolveGame -> solveGame
-  TestAllWords -> pure unit -- TODO
+  TestAllWords -> testAllWords
+  TestStep -> testStep
 
 resetState :: forall o. H.HalogenM State Action () o Aff Unit
 resetState =
@@ -336,3 +371,46 @@ updateSolverBoard sState@{guesses, sentColorings, currentColoring} = sState {boa
           zipWith toCells guesses colorings
           <> replicate (maxGuesses - length guesses) (replicate 5 {letter: ' ', color: None})
         toCells s colors = zipWith (\letter color -> {letter, color}) (toCharArray s) colors
+
+{- Testing -}
+
+testAllWords :: forall o. H.HalogenM State Action () o Aff Unit
+testAllWords =
+  do state <- H.get
+     case state.currentPage of
+      Solver _ -> pure unit
+      Game gState -> do
+                        subId <- H.subscribe =<< timer TestStep
+                        H.put $ state {currentPage = Game $ gState {testStatus = Testing subId <<< mkDefTestState $ getWordList state}}
+
+testStep :: forall o. H.HalogenM State Action () o Aff Unit
+testStep = do state <- H.get
+              case state.currentPage of
+                Game gState@{testStatus: Testing subId tState} ->
+                  do let tState'
+                           | gameIsWin gState = case length gState.sentGuesses of
+                              1 -> tState {one = tState.one + 1}
+                              2 -> tState {two = tState.two + 1}
+                              3 -> tState {three = tState.three + 1}
+                              4 -> tState {four = tState.four + 1}
+                              5 -> tState {five = tState.five + 1}
+                              6 -> tState {six = tState.six + 1}
+                              _ -> tState -- shouldn't happen
+                           | otherwise = tState {failed = tState.failed + 1}
+                     case Array.uncons tState.wordsToGo of
+                       Nothing -> do H.put $ state {currentPage = Game $ gState {testStatus = DoneTesting tState'}}
+                                     H.unsubscribe subId
+                       Just {head, tail} -> do H.put $ state {currentPage = Game $ gState'}
+                                               handleAction SolveGame
+                         where gState' = (mkGameState 0 [head]) {testStatus = Testing subId tState''}
+                               tState'' = tState' {wordsToGo = tail}
+                _ -> pure unit -- STOP the cycle
+
+-- from https://github.com/purescript-halogen/purescript-halogen/blob/master/docs/guide/04-Lifecycles-Subscriptions.md
+timer :: forall m a. MonadAff m => a -> m (HS.Emitter a)
+timer val = do
+  { emitter, listener } <- H.liftEffect HS.create
+  _ <- H.liftAff $ Aff.forkAff $ forever do
+    Aff.delay $ Aff.Milliseconds 10.0
+    H.liftEffect $ HS.notify listener val
+  pure emitter

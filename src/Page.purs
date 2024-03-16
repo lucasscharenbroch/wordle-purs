@@ -174,7 +174,7 @@ settingsBox state =
         , HE.onClick \_ -> TestAllWords
         ]
         [HH.text "Test All Words in Word List"]
-    , HH.text testStatus
+    , testStateElem
     , HH.br_
     , HH.button
         [HP.classes [HH.ClassName "okButton"]
@@ -182,7 +182,23 @@ settingsBox state =
         ]
         [HH.text "OK"]
     ]
-  where testStatus = "" -- TODO compute testStatus using state
+  where testStateElem = case state.currentPage of
+          Game {testStatus: Testing _ state} -> testState state
+          Game {testStatus: DoneTesting state} -> testState state
+          _ -> HH.text ""
+
+testState :: TestState -> forall w. HH.HTML w Action
+testState state =
+  HH.div_
+  [ HH.p_ <<< Array.singleton $ HH.text ("1:" <> show state.one)
+  , HH.p_ <<< Array.singleton $ HH.text ("3:" <> show state.two)
+  , HH.p_ <<< Array.singleton $ HH.text ("4:" <> show state.three)
+  , HH.p_ <<< Array.singleton $ HH.text ("5:" <> show state.four)
+  , HH.p_ <<< Array.singleton $ HH.text ("6:" <> show state.five)
+  , HH.p_ <<< Array.singleton $ HH.text ("failed:" <> show state.six)
+  , HH.p_ <<< Array.singleton $ HH.text ("total:" <> show total)
+  ]
+  where total = state.one + state.two + state.three + state.four + state.five + state.six + state.failed
 
 {- Game-Page -}
 
