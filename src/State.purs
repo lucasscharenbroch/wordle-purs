@@ -42,7 +42,6 @@ type GameState =
   , currentWord :: String
   , sentGuesses :: Array String
   , currentGuess :: String
-  , isWin :: Boolean
   , board :: Board
   }
 
@@ -61,7 +60,6 @@ mkGameState seed wordList =
                    _ -> "BUGGY" -- shouldn't happen
   , sentGuesses: []
   , currentGuess: ""
-  , isWin: false
   , board: defBoard
   }
 
@@ -140,8 +138,8 @@ handleAction = case _ of
   GenerateGuess -> generateGuess
   RegenerateGuess -> regenerateGuess
   PressColorKey c -> pressColorButton c
+  SolveGame -> solveGame
   TestAllWords -> pure unit -- TODO
-  SolveGame -> pure unit -- TODO
 
 resetState :: forall o. H.HalogenM State Action () o Aff Unit
 resetState =
@@ -176,13 +174,12 @@ pressEnter = do
       | String.length currentGuess /= wordLength -> pure unit
       | not $ currentGuess `elem` (getWordList s) -> alert $ "`" <> currentGuess <> "` is not in the word list."
       | otherwise -> do let wasWin = gameIsWin gState
-                        let gState' = gState {sentGuesses = sentGuesses <> [currentGuess], currentGuess = ""}
+                        let gState' = updateBoardAndKeyboard $ gState {sentGuesses = sentGuesses <> [currentGuess], currentGuess = ""}
                         let isWin = gameIsWin gState'
                         let justWon = not wasWin && isWin
-                        let gState'' = updateBoardAndKeyboard $ gState' {isWin = wasWin || isWin}
-                        H.put $ s {currentPage = Game gState''}
+                        H.put $ s {currentPage = Game gState'}
                         if justWon
-                        then alert <<< successMessage $ length gState''.sentGuesses
+                        then alert <<< successMessage $ length gState'.sentGuesses
                         else pure unit
     _ -> pure unit -- TODO add functionality for solver page?
 
@@ -232,8 +229,8 @@ handleKeypressEvent event = res
 {- Game-Page -}
 
 gameStateKeyPress :: GameState -> Key -> GameState
-gameStateKeyPress state@{sentGuesses, currentGuess, isWin} (KLetter c)
-  | isWin = state
+gameStateKeyPress state@{sentGuesses, currentGuess} (KLetter c)
+  | gameIsWin state = state
   | length sentGuesses >= maxGuesses = state
   | String.length currentGuess < wordLength = state {currentGuess = currentGuess <> singleton c}
   | otherwise = state
@@ -254,6 +251,24 @@ updateBoardAndKeyboard gState@{currentWord, sentGuesses, currentGuess} = gState 
         step m {letter, color} = Map.insertWith greener letter color m
         colorRow :: String -> String -> Array Cell
         colorRow correctWord = gradeGuess (toCharArray correctWord) <<< toCharArray
+
+solveGame :: forall o. H.HalogenM State Action () o Aff Unit
+solveGame =
+  do
+    state <- H.get
+    case state.currentPage of
+      Solver _ -> pure unit
+      Game gState -> do gState' <- solveGameState (getWordList state) gState
+                        H.put $ state {currentPage = Game $ gState'}
+
+solveGameState :: forall o. Array String -> GameState -> H.HalogenM State Action () o Aff GameState
+solveGameState wordList gState
+  | gameIsWin gState || length gState.sentGuesses == maxGuesses = pure gState
+  | otherwise = case pickGuess validWords of
+                  Nothing -> alert "Ran out of possible words." *> pure gState
+                  Just newGuess -> solveGameState wordList gState'
+                    where gState' = updateBoardAndKeyboard $ gState {sentGuesses = gState.sentGuesses <> [newGuess], currentGuess = ""}
+    where validWords = wordsFittingBoard wordList gState.board
 
 {- Solver-Page -}
 
