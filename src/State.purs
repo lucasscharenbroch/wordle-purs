@@ -280,7 +280,25 @@ generateGuess =
                                                  }
 
 regenerateGuess :: forall o. H.HalogenM State Action () o Aff Unit
-regenerateGuess = pure unit
+regenerateGuess =
+  do state <- H.get
+     case state.currentPage of
+       Game _ -> pure unit
+       Solver sState@{guesses, invalidWords, sentColorings} ->
+         do H.put $ state {currentPage = Solver sState'}
+            generateGuess
+         where
+           Tuple guesses' invalidWords' = case unsnoc guesses of
+             Just {init, last} -> Tuple init (invalidWords <> [last])
+             Nothing -> Tuple [] invalidWords
+           Tuple sentColorings' currentColoring' = case unsnoc sentColorings of
+             Just {init, last} -> Tuple init last
+             Nothing -> Tuple [] []
+           sState' = sState { guesses = guesses'
+                            , invalidWords = invalidWords'
+                            , sentColorings = sentColorings'
+                            , currentColoring = currentColoring'
+                            }
 
 pressColorButton :: forall o. Color -> H.HalogenM State Action () o Aff Unit
 pressColorButton color =
