@@ -2,6 +2,9 @@ module Util where
 
 import Prelude
 
+import Data.Map (Map)
+import Data.Map as Map
+import Data.Array (foldl)
 import Data.Array as Array
 import Data.CodePoint.Unicode (isLetter) as Unicode
 import Data.Maybe (fromMaybe)
@@ -39,3 +42,9 @@ blackbird :: forall a b c d. (c -> d) -> (a -> b -> c) -> a -> b -> d
 blackbird = (<<<) <<< (<<<)
 
 infixr 8 blackbird as .:
+
+id :: forall a. a -> a
+id x = x
+
+countIntoMap :: forall a. Ord a => Array a -> Map a Int
+countIntoMap = foldl (\m k -> Map.insertWith (+) k 1 m) Map.empty
