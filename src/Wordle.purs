@@ -81,19 +81,35 @@ fitsCntConstraints board s = Map.intersection minCnts guessCnts == minCnts
     guessCnts = countIntoMap <<< toCharArray $ s
     guessCnts' = foldl (\m c -> Map.insertWith max c 0 m) guessCnts <<< toCharArray $ "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
+
+data CurriedEqualityCheck a = CurriedEq a
+                            | CurriedNe a
+
+derive instance curriedEqalityCheckEq :: Eq a => Eq (CurriedEqualityCheck a)
+
+applyCurriedEqualityCheck :: forall a. Eq a => CurriedEqualityCheck a -> a -> Boolean
+applyCurriedEqualityCheck (CurriedEq x) y = x == y
+applyCurriedEqualityCheck (CurriedNe x) y = x /= y
+
 -- greens => exact position match
 -- yellows, grays => position mismatch
 fitsPosConstraints :: Board -> String -> Boolean
 fitsPosConstraints board s = all id $ zipWith ($) charFns (toCharArray s)
   where
-    charFns = foldl (zipWith (\f g x -> f x && g x)) (replicate 5 $ const true) cellFns
-    cellFns = map (map getCellConstraint) board
+    charFns = map conjChecks charChecks
+    conjChecks checks x = all (flip ($) x) checks'
+      where checks' = map applyCurriedEqualityCheck $ nubEq checks
+    charChecks :: Array (Array (CurriedEqualityCheck Char))
+    charChecks = foldl (zipWith (<>)) (replicate 5 []) cellChecks
+    cellChecks :: Array (Array (Array (CurriedEqualityCheck Char)))
+    cellChecks = map (map getCellConstraint) board
+    getCellConstraint :: Cell -> Array (CurriedEqualityCheck Char)
     getCellConstraint {letter, color} =
       case color of
-        Green -> \c -> c == letter
-        Yellow -> \c -> c /= letter
-        Gray -> \c -> c /= letter
-        None -> const true
+        Green -> [CurriedEq letter]
+        Yellow -> [CurriedNe letter]
+        Gray -> [CurriedNe letter]
+        None -> []
 
 pickGuess :: Array String -> Maybe String
 pickGuess = head -- TODO
