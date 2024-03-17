@@ -37,7 +37,7 @@ jobs:
         run: spago build
 
       - name: Bundle code
-        run: npm run build
+        run: npm run build-dev
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
