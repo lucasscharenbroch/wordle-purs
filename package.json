@@ -5,6 +5,6 @@
       "build": "spago build",
       "test": "spago test",
       "serve": "parcel serve dev/*.html",
-      "build-dev": "parcel build dev/*"
+      "build-dev": "parcel build dev/* --public-url ./"
   }
 }
