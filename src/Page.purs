@@ -193,13 +193,15 @@ settingsBox state =
 
 testState :: TestState -> forall w. HH.HTML w Action
 testState state =
-  HH.div_
+  HH.div
+  [HP.id "testState"]
   [ HH.p_ <<< Array.singleton $ HH.text ("1: " <> show state.one)
-  , HH.p_ <<< Array.singleton $ HH.text ("3: " <> show state.two)
-  , HH.p_ <<< Array.singleton $ HH.text ("4: " <> show state.three)
-  , HH.p_ <<< Array.singleton $ HH.text ("5: " <> show state.four)
-  , HH.p_ <<< Array.singleton $ HH.text ("6: " <> show state.five)
-  , HH.p_ <<< Array.singleton $ HH.text ("failed: " <> show state.six)
+  , HH.p_ <<< Array.singleton $ HH.text ("2: " <> show state.two)
+  , HH.p_ <<< Array.singleton $ HH.text ("3: " <> show state.three)
+  , HH.p_ <<< Array.singleton $ HH.text ("4: " <> show state.four)
+  , HH.p_ <<< Array.singleton $ HH.text ("5: " <> show state.five)
+  , HH.p_ <<< Array.singleton $ HH.text ("6: " <> show state.six)
+  , HH.p_ <<< Array.singleton $ HH.text ("failed: " <> show state.failed)
   , HH.p_ <<< Array.singleton $ HH.text ("total: " <> show total)
   ]
   where total = state.one + state.two + state.three + state.four + state.five + state.six + state.failed

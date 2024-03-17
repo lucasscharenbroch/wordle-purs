@@ -123,7 +123,7 @@ html, body {
     font-size: 20px;
 }
 
-#testButton{
+#testButton {
     width: 70%;
     margin: 1%;
     padding: 10px;
@@ -132,6 +132,10 @@ html, body {
 
     position: relative;
     left: 15%;
+}
+
+#testState > p {
+    font-size: 15px;
 }
 
 .okButton {

@@ -115,4 +115,17 @@ fitsPosConstraints board = \s -> all id $ zipWith ($) charFns (toCharArray s)
         None -> []
 
 pickGuess :: Array String -> Maybe String
-pickGuess = head -- TODO
+pickGuess = mostRepresentativeGuess
+
+-- maximize positional similarity to other words:
+-- find word w that maximizes sum (f[i][w[i]])
+-- where f[i][c] = num-words-with-c-at-index-i
+mostRepresentativeGuess :: Array String -> Maybe String
+mostRepresentativeGuess words = case unsnoc scoredTuples of
+  Just {init, last} -> Just <<< fst <<< foldr (\x y -> if snd x >= snd y then x else y) last $ init
+  Nothing -> Nothing
+  where words' = map toCharArray words
+        f :: Array (Map Char Int)
+        f = foldl (zipWith \m c -> Map.insertWith (+) c 1 m) (replicate 5 Map.empty) words'
+        scores = map (Foldable.sum <<< zipWith (\m c -> lookupOr 0 c m) f) words'
+        scoredTuples = zip words scores
