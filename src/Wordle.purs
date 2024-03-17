@@ -63,7 +63,7 @@ wordsFittingBoard words board = filter fitsConstraints words
   where
     fitsPos = fitsPosConstraints board
     fitsCnts = fitsCntConstraints board
-    fitsConstraints s =  fitsPos s  && fitsCnts s
+    fitsConstraints s = fitsPos s && fitsCnts s
 
 -- yellows => net minimum char count
 -- grays => net maximum char count

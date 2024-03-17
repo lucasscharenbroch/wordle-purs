@@ -38,7 +38,7 @@ render state =
       , whenElem state.showSettings (\_ -> settingsBox state)
       ]
 
-{- ALl Pages (Game and Solver) -}
+{- All Pages (Game and Solver) -}
 
 container :: forall w. State -> HH.HTML w Action
 container state =
