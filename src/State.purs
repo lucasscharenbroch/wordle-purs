@@ -153,6 +153,7 @@ data Action = SetInfoBoxVis Boolean
             | HandleKeypress KeyboardEvent
             | PressEnter
             | TestStep
+            | StopTesting
 
 {- All Pages -}
 
@@ -175,6 +176,7 @@ handleAction = case _ of
   SolveGame -> solveGame
   TestAllWords -> testAllWords
   TestStep -> testStep
+  StopTesting -> stopTesting
 
 resetState :: forall o. H.HalogenM State Action () o Aff Unit
 resetState =
@@ -384,27 +386,38 @@ testAllWords =
                         H.put $ state {currentPage = Game $ gState {testStatus = Testing subId <<< mkDefTestState $ getWordList state}}
 
 testStep :: forall o. H.HalogenM State Action () o Aff Unit
-testStep = do state <- H.get
-              case state.currentPage of
-                Game gState@{testStatus: Testing subId tState} ->
-                  do let tState'
-                           | gameIsWin gState = case length gState.sentGuesses of
-                              1 -> tState {one = tState.one + 1}
-                              2 -> tState {two = tState.two + 1}
-                              3 -> tState {three = tState.three + 1}
-                              4 -> tState {four = tState.four + 1}
-                              5 -> tState {five = tState.five + 1}
-                              6 -> tState {six = tState.six + 1}
-                              _ -> tState -- shouldn't happen
-                           | otherwise = tState {failed = tState.failed + 1}
-                     case Array.uncons tState.wordsToGo of
-                       Nothing -> do H.put $ state {currentPage = Game $ gState {testStatus = DoneTesting tState'}}
-                                     H.unsubscribe subId
-                       Just {head, tail} -> do H.put $ state {currentPage = Game $ gState'}
-                                               handleAction SolveGame
-                         where gState' = (mkGameState 0 [head]) {testStatus = Testing subId tState''}
-                               tState'' = tState' {wordsToGo = tail}
-                _ -> pure unit -- STOP the cycle
+testStep =
+  do state <- H.get
+     case state.currentPage of
+       Game gState@{testStatus: Testing subId tState} ->
+         do let tState'
+                  | gameIsWin gState = case length gState.sentGuesses of
+                     1 -> tState {one = tState.one + 1}
+                     2 -> tState {two = tState.two + 1}
+                     3 -> tState {three = tState.three + 1}
+                     4 -> tState {four = tState.four + 1}
+                     5 -> tState {five = tState.five + 1}
+                     6 -> tState {six = tState.six + 1}
+                     _ -> tState -- shouldn't happen
+                  | otherwise = tState {failed = tState.failed + 1}
+            case Array.uncons tState.wordsToGo of
+              Nothing -> do H.put $ state {currentPage = Game $ gState {testStatus = DoneTesting tState'}}
+                            H.unsubscribe subId
+              Just {head, tail} -> do H.put $ state {currentPage = Game $ gState'}
+                                      handleAction SolveGame
+                where gState' = (mkGameState 0 [head]) {testStatus = Testing subId tState''}
+                      tState'' = tState' {wordsToGo = tail}
+       _ -> pure unit -- STOP the cycle
+
+stopTesting :: forall o. H.HalogenM State Action () o Aff Unit
+stopTesting =
+  do state <- H.get
+     case state.currentPage of
+          Game gState@{testStatus: Testing subId tState} ->
+            do H.put $ state {currentPage = Game $ gState {testStatus = DoneTesting tState}}
+               H.unsubscribe subId
+          _ -> pure unit
+
 
 -- from https://github.com/purescript-halogen/purescript-halogen/blob/master/docs/guide/04-Lifecycles-Subscriptions.md
 timer :: forall m a. MonadAff m => a -> m (HS.Emitter a)
