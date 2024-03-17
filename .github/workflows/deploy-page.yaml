@@ -33,9 +33,6 @@ jobs:
       - name: Install Spago
         run: npm install -g spago
 
-      - name: Install dependencies
-        run: npm ci
-
       - name: Build PureScript code
         run: spago build
 
